@@ -3,6 +3,7 @@ import { EventInspector } from "./components/EventInspector"
 import { EventLegend } from "./components/EventLegend"
 import { HexGrid } from "./components/HexGrid"
 import { PlaybackControls } from "./components/PlaybackControls"
+import { SourceModeToggle } from "./components/SourceModeToggle"
 import { ZoomControls } from "./components/ZoomControls"
 import { useReplayDriver } from "./lib/useReplayDriver"
 import { useReplayClock } from "./lib/replayClock"
@@ -10,6 +11,7 @@ import { useReplayClock } from "./lib/replayClock"
 export default function App() {
 	useReplayDriver()
 	const selectAgent = useReplayClock((s) => s.selectAgent)
+	const sourceMode = useReplayClock((s) => s.sourceMode)
 
 	// ESC clears focus, Space toggles play/pause.
 	useEffect(() => {
@@ -32,17 +34,26 @@ export default function App() {
 						mozaik-replay
 					</span>
 					<span className="text-[11px] uppercase tracking-[0.25em] text-[var(--color-fg-muted)]">
-						phase 1 prototype · scripted demo run
+						{sourceMode === "live"
+							? "live · sample audit log"
+							: sourceMode === "connecting"
+								? "connecting to backend…"
+								: sourceMode === "error"
+									? "backend error · falling back to demo"
+									: "scripted demo run"}
 					</span>
 				</div>
-				<a
-					href="https://github.com/jigjoy-ai/mozaik-replay"
-					target="_blank"
-					rel="noreferrer"
-					className="text-xs font-mono text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] transition-colors"
-				>
-					github ↗
-				</a>
+				<div className="flex items-center gap-3">
+					<SourceModeToggle />
+					<a
+						href="https://github.com/jigjoy-ai/mozaik-replay"
+						target="_blank"
+						rel="noreferrer"
+						className="text-xs font-mono text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] transition-colors"
+					>
+						github ↗
+					</a>
+				</div>
 			</header>
 
 			<EventLegend />

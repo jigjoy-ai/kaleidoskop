@@ -70,47 +70,55 @@ export function useReplayDriver() {
 			lastWall = wall
 
 			let nextSim = state.simTimeMs + dt
-			if (nextSim > RUN_DURATION_MS + RESET_DELAY_MS) {
-				state.resetRun()
-				prevActiveRef.current = new Set()
-				triggeredRef.current.clear()
-				nextSim = 0
-			}
-			state.setSimTime(nextSim)
+			const live = state.sourceMode === "live" || state.sourceMode === "connecting"
 
-			const states: Record<string, "hidden" | "active" | "completed"> = {}
-			const activeIds: string[] = []
-			for (const script of RUN_SCRIPT) {
-				const st = agentStateAt(script.id, nextSim)
-				states[script.id] = st
-				if (st === "active") activeIds.push(script.id)
-			}
-			state.setAgentStates(states)
-
-			// Spawn ripples for newly-active participants.
-			const currentActive = new Set(activeIds)
-			for (const id of activeIds) {
-				if (prevActiveRef.current.has(id)) continue
-				if (id === "conductor") continue
-				const parent = lookupScript(id)?.parentId
-				if (parent && currentActive.has(parent)) {
-					state.emit(spawnEvent(wall, parent, id))
+			// Demo-mode scripted run owns the simTime + agent lifecycle.
+			// In live mode the WS client owns those — the frame loop here
+			// only handles ripple → subscriber pacing and stale-state GC.
+			if (!live) {
+				if (nextSim > RUN_DURATION_MS + RESET_DELAY_MS) {
+					state.resetRun()
+					prevActiveRef.current = new Set()
+					triggeredRef.current.clear()
+					nextSim = 0
 				}
-			}
-			prevActiveRef.current = currentActive
+				state.setSimTime(nextSim)
 
-			// Steady-state events.
-			timeUntilEmit -= dt
-			if (timeUntilEmit <= 0 && activeIds.length > 0) {
-				const event = nextEvent(wall, activeIds, state.selectedAgentId)
-				if (event) state.emit(event)
-				timeUntilEmit = computeEmitInterval(activeIds.length)
+				const states: Record<string, "hidden" | "active" | "completed"> = {}
+				const activeIds: string[] = []
+				for (const script of RUN_SCRIPT) {
+					const st = agentStateAt(script.id, nextSim)
+					states[script.id] = st
+					if (st === "active") activeIds.push(script.id)
+				}
+				state.setAgentStates(states)
+
+				// Spawn ripples for newly-active participants.
+				const currentActive = new Set(activeIds)
+				for (const id of activeIds) {
+					if (prevActiveRef.current.has(id)) continue
+					if (id === "conductor") continue
+					const parent = lookupScript(id)?.parentId
+					if (parent && currentActive.has(parent)) {
+						state.emit(spawnEvent(wall, parent, id))
+					}
+				}
+				prevActiveRef.current = currentActive
+
+				// Steady-state events.
+				timeUntilEmit -= dt
+				if (timeUntilEmit <= 0 && activeIds.length > 0) {
+					const event = nextEvent(wall, activeIds, state.selectedAgentId)
+					if (event) state.emit(event)
+					timeUntilEmit = computeEmitInterval(activeIds.length)
+				}
 			}
 
 			// Ripple → subscriber pacing. As the front-edge of the ripple expands
 			// from the source at RIPPLE_SPEED_PX_PER_SEC, each subscriber lights
 			// up at the moment the wave reaches its centre.
 			const ripples = state.activeRipples
+			const agentStates = state.agentState
 			for (const ripple of ripples) {
 				let triggered = triggeredRef.current.get(ripple.id)
 				if (!triggered) {
@@ -119,7 +127,8 @@ export function useReplayDriver() {
 				}
 				for (const subId of ripple.subscriberIds) {
 					if (triggered.has(subId)) continue
-					if (!states[subId] || states[subId] === "hidden") continue
+					const lifeState = agentStates[subId]
+					if (!lifeState || lifeState === "hidden") continue
 					const dist = distance(ripple.sourceId, subId)
 					const delayMs = (dist / RIPPLE_SPEED_PX_PER_SEC) * 1000
 					if (wall - ripple.at >= delayMs) {
