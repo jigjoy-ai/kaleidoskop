@@ -20,21 +20,18 @@ export function EdgeFlash({ event, from, to }: Props) {
 				stroke={color}
 				strokeWidth={1.6}
 				strokeLinecap="round"
-				initial={{ opacity: 0.9 }}
+				initial={{ opacity: 0.55 }}
 				animate={{ opacity: 0 }}
-				transition={{ duration: 0.9, ease: "easeOut" }}
+				transition={{ duration: 0.85, ease: "easeOut" }}
+				style={{ mixBlendMode: "screen" }}
 			/>
 			<motion.circle
-				r={4.5}
+				r={5}
 				fill={color}
 				initial={{ cx: from.x, cy: from.y, opacity: 1 }}
-				animate={{
-					cx: to.x,
-					cy: to.y,
-					opacity: 0,
-				}}
-				transition={{ duration: 0.6, ease: "easeOut" }}
-				style={{ filter: `drop-shadow(0 0 6px ${color})` }}
+				animate={{ cx: to.x, cy: to.y, opacity: 0 }}
+				transition={{ duration: 0.65, ease: "easeOut" }}
+				style={{ filter: `drop-shadow(0 0 9px ${color})` }}
 			/>
 		</>
 	)

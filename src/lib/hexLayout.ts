@@ -1,50 +1,89 @@
 import type { Participant, PixelCoord } from "./types"
 
-export const HEX_RADIUS = 44
+// Circumradius (centre → vertex) of every hex in the grid.
+export const HEX_SIZE = 50
 
-// Flat-top hex geometry.
-//   Center-to-vertex distance = HEX_RADIUS
-//   Width (vertex to vertex horizontally)  = 2 * HEX_RADIUS
-//   Height (flat edge to flat edge)        = sqrt(3) * HEX_RADIUS
-//   Adjacent center-to-center distance     = sqrt(3) * HEX_RADIUS
+// Visual inset on the polygon. The honeycomb math is tight tessellation; this
+// shrinks each drawn polygon a touch so adjacent cells render a hairline gap
+// instead of merging strokes.
+const POLYGON_INSET = 0.955
+
 const SQRT3 = Math.sqrt(3)
 
-// Hex polygon vertices around a center (cx, cy), flat-top orientation.
-export function hexVertices(cx: number, cy: number, r = HEX_RADIUS): string {
+interface Axial {
+	q: number
+	r: number
+}
+
+// Cube/axial neighbour directions, ordered so that ringCoords walks each ring
+// counter-clockwise starting from the lower-left.
+const CUBE_DIRECTIONS: readonly Axial[] = [
+	{ q: +1, r: 0 },
+	{ q: +1, r: -1 },
+	{ q: 0, r: -1 },
+	{ q: -1, r: 0 },
+	{ q: -1, r: +1 },
+	{ q: 0, r: +1 },
+]
+
+function ringCoords(radius: number): Axial[] {
+	if (radius === 0) return [{ q: 0, r: 0 }]
+	const results: Axial[] = []
+	// Start at direction[4] * radius — bottom-left corner of the ring.
+	let hex: Axial = {
+		q: CUBE_DIRECTIONS[4].q * radius,
+		r: CUBE_DIRECTIONS[4].r * radius,
+	}
+	for (let side = 0; side < 6; side++) {
+		for (let step = 0; step < radius; step++) {
+			results.push({ ...hex })
+			hex = {
+				q: hex.q + CUBE_DIRECTIONS[side].q,
+				r: hex.r + CUBE_DIRECTIONS[side].r,
+			}
+		}
+	}
+	return results
+}
+
+// Pointy-top axial → pixel.
+function axialToPixel(coord: Axial, size = HEX_SIZE): PixelCoord {
+	return {
+		x: size * SQRT3 * (coord.q + coord.r / 2),
+		y: size * 1.5 * coord.r,
+	}
+}
+
+const RING_COORDS: readonly (readonly Axial[])[] = [
+	ringCoords(0),
+	ringCoords(1),
+	ringCoords(2),
+]
+
+export function layoutFor(participant: Participant): PixelCoord {
+	const ring = RING_COORDS[participant.ring]
+	const coord = ring[participant.ringIndex]
+	return axialToPixel(coord)
+}
+
+// Pointy-top hex vertices around (cx, cy). The first vertex sits directly
+// above the centre, others march clockwise.
+export function hexVertices(cx: number, cy: number, size = HEX_SIZE): string {
+	const r = size * POLYGON_INSET
 	const points: string[] = []
 	for (let i = 0; i < 6; i++) {
-		const angle = (i * Math.PI) / 3
-		points.push(`${cx + r * Math.cos(angle)},${cy + r * Math.sin(angle)}`)
+		const angle = (Math.PI / 3) * i - Math.PI / 2
+		points.push(
+			`${(cx + r * Math.cos(angle)).toFixed(3)},${(cy + r * Math.sin(angle)).toFixed(3)}`,
+		)
 	}
 	return points.join(" ")
 }
 
-// Place a participant in 2D space using polar coordinates per ring.
-// Ring 0 (center): origin.
-// Ring 1 (6 hexes): evenly spaced around origin, starting at top (rotated 30° so a
-//                   hex sits directly above center rather than at a vertex).
-// Ring 2 (12 hexes): same starting angle, twice the radius.
-export function layoutFor(participant: Participant): PixelCoord {
-	if (participant.ring === 0) return { x: 0, y: 0 }
-
-	const count = participant.ring === 1 ? 6 : 12
-	const radius =
-		participant.ring === 1
-			? SQRT3 * HEX_RADIUS * 1.05
-			: 2 * SQRT3 * HEX_RADIUS * 1.05
-
-	// Rotate by -90° so index 0 is at the top.
-	// Add a small per-ring phase shift so ring 2 nests in the gaps of ring 1.
-	const phaseShift = participant.ring === 2 ? Math.PI / 12 : 0
-	const theta =
-		-Math.PI / 2 + (participant.ringIndex / count) * 2 * Math.PI + phaseShift
-
-	return {
-		x: radius * Math.cos(theta),
-		y: radius * Math.sin(theta),
-	}
-}
-
-// SVG viewBox dimensions chosen to comfortably contain ring 2 plus hex radius.
-export const VIEWBOX_SIZE = 580
+// Outer ring 2 centres sit at distance 2*sqrt(3)*size from origin.
+// Hex vertices stick out an extra `size` past each centre.
+// Plus a small padding so the canvas doesn't hug the outermost vertices.
+const MAX_EXTENT = 2 * SQRT3 * HEX_SIZE + HEX_SIZE
+const PADDING = HEX_SIZE * 0.45
+export const VIEWBOX_SIZE = Math.ceil((MAX_EXTENT + PADDING) * 2)
 export const VIEWBOX = `${-VIEWBOX_SIZE / 2} ${-VIEWBOX_SIZE / 2} ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}`
