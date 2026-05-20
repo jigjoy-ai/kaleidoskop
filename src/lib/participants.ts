@@ -1,56 +1,106 @@
 import type { DomainEvent, Participant } from "./types"
 
-// Long-lived participants on the Mozaik bus during a baro run. Mirrors the
-// real participant set in baro/packages/baro-orchestrator/src/participants/.
-// Architect, Planner, and Reader are NOT here — they run as one-shot Claude
-// CLI invocations *before* the bus orchestration begins, producing the
-// architecture spec and the story DAG that Conductor then consumes.
-const DRIVERS: Participant[] = [
-	{ id: "conductor", label: "Conductor", role: "conductor" },
-	{ id: "story-factory", label: "StoryFactory", role: "driver" },
-	{ id: "operator", label: "Operator", role: "driver" },
+// 19-cell honeycomb: 1 + 6 + 12. The visual contract trumps strict role
+// purity — StoryFactory and Operator are real long-lived bus participants
+// but they share ring 2 with 10 story agents instead of getting their own
+// inner ring. Ring 2 positions are walked counter-clockwise from bottom-left
+// (ringIndex 0) so the algorithmic ordering and the hand-picked placements
+// stay in sync.
+//
+// ring 0 — Conductor at the centre (drives the DAG)
+// ring 1 — 6 observers
+// ring 2 — Operator at bottom-centre, StoryFactory at top-centre,
+//          10 story agents at the remaining 10 positions
+
+interface ParticipantDecl extends Participant {}
+
+const RING_0: ParticipantDecl[] = [
+	{ id: "conductor", label: "Conductor", role: "conductor", ring: 0, ringIndex: 0 },
 ]
 
-const OBSERVERS: Participant[] = [
-	{ id: "critic", label: "Critic", role: "observer" },
-	{ id: "surgeon", label: "Surgeon", role: "observer" },
-	{ id: "librarian", label: "Librarian", role: "observer" },
-	{ id: "sentry", label: "Sentry", role: "observer" },
-	{ id: "auditor", label: "Auditor", role: "observer" },
-	{ id: "finalizer", label: "Finalizer", role: "observer" },
+// Order matters: ringIndex walks counter-clockwise from bottom-left.
+const RING_1: ParticipantDecl[] = [
+	{ id: "critic", label: "Critic", role: "observer", ring: 1, ringIndex: 0 },
+	{ id: "surgeon", label: "Surgeon", role: "observer", ring: 1, ringIndex: 1 },
+	{ id: "librarian", label: "Librarian", role: "observer", ring: 1, ringIndex: 2 },
+	{ id: "sentry", label: "Sentry", role: "observer", ring: 1, ringIndex: 3 },
+	{ id: "auditor", label: "Auditor", role: "observer", ring: 1, ringIndex: 4 },
+	{ id: "finalizer", label: "Finalizer", role: "observer", ring: 1, ringIndex: 5 },
 ]
 
-const STORY_COUNT = 12
-const STORY_AGENTS: Participant[] = Array.from(
-	{ length: STORY_COUNT },
-	(_, i) => ({
+// Ring 2 layout (counter-clockwise from bottom-left, 12 slots):
+//   0  bottom-far-left   → story-01
+//   1  bottom-centre     → Operator
+//   2  bottom-far-right  → story-02
+//   3  right-bottom      → story-03
+//   4  far-right         → story-04
+//   5  right-top         → story-05
+//   6  top-far-right     → story-06
+//   7  top-centre        → StoryFactory
+//   8  top-far-left      → story-07
+//   9  left-top          → story-08
+//  10  far-left          → story-09
+//  11  left-bottom       → story-10
+const STORY_LABELS = [
+	"S01",
+	"S02",
+	"S03",
+	"S04",
+	"S05",
+	"S06",
+	"S07",
+	"S08",
+	"S09",
+	"S10",
+] as const
+const STORY_RING_INDICES = [0, 2, 3, 4, 5, 6, 8, 9, 10, 11] as const
+
+const RING_2: ParticipantDecl[] = [
+	{
+		id: "operator",
+		label: "Operator",
+		role: "driver",
+		ring: 2,
+		ringIndex: 1,
+	},
+	{
+		id: "story-factory",
+		label: "StoryFactory",
+		role: "driver",
+		ring: 2,
+		ringIndex: 7,
+	},
+	...STORY_LABELS.map((label, i) => ({
 		id: `story-${String(i + 1).padStart(2, "0")}`,
-		label: `S${String(i + 1).padStart(2, "0")}`,
+		label,
 		role: "story" as const,
-	}),
-)
-
-export const PARTICIPANTS: Participant[] = [
-	...DRIVERS,
-	...OBSERVERS,
-	...STORY_AGENTS,
+		ring: 2 as const,
+		ringIndex: STORY_RING_INDICES[i],
+	})),
 ]
+
+export const PARTICIPANTS: Participant[] = [...RING_0, ...RING_1, ...RING_2]
 
 export const PARTICIPANT_BY_ID = new Map(
 	PARTICIPANTS.map((p) => [p.id, p]),
 )
 
-export const STORY_IDS: readonly string[] = STORY_AGENTS.map((p) => p.id)
-export const OBSERVER_IDS: readonly string[] = OBSERVERS.map((p) => p.id)
-export const DRIVER_IDS: readonly string[] = DRIVERS.map((p) => p.id)
+export const STORY_IDS: readonly string[] = PARTICIPANTS.filter(
+	(p) => p.role === "story",
+).map((p) => p.id)
+export const OBSERVER_IDS: readonly string[] = PARTICIPANTS.filter(
+	(p) => p.role === "observer",
+).map((p) => p.id)
+export const DRIVER_IDS: readonly string[] = PARTICIPANTS.filter(
+	(p) => p.role === "driver",
+).map((p) => p.id)
 
 // Per-event subscriber sets. Sourced from CORE.md / OBSERVERS.md / types.ts
 // in baro/packages/baro-orchestrator/src/participants. "auditor" subscribes
-// to literally everything (its job is to JSONL the run); we include it
-// explicitly per event so the emit-site has the full subscriber list.
+// to literally everything (its job is to JSONL the run).
 //
-// For the dynamic-recipient events (agent_targeted_message), we pick a
-// plausible story agent at emit time and append it to the list.
+// For dynamic-recipient events (agent_targeted_message), the scripted stream
+// splices in a plausible story agent at emit time.
 export const SUBSCRIBERS: Record<DomainEvent, readonly string[]> = {
 	agent_state: ["sentry", "auditor"],
 	story_spawn_request: ["story-factory", "auditor"],
@@ -69,13 +119,10 @@ export const SUBSCRIBERS: Record<DomainEvent, readonly string[]> = {
 	knowledge: ["conductor", "auditor"],
 	replan: ["conductor", "auditor"],
 	coordination: ["auditor"],
-	// agent_targeted_message has a recipientId field; we splice in a story id
-	// at emit time. Auditor always in.
 	agent_targeted_message: ["auditor"],
 	error: ["auditor"],
 }
 
-// Emitters per event type — used to assign roles in the scripted run.
 export const EMITTERS: Record<DomainEvent, readonly string[]> = {
 	agent_state: STORY_IDS,
 	story_spawn_request: ["conductor"],

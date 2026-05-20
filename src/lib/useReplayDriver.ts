@@ -11,7 +11,8 @@ import {
 	lookupScript,
 } from "./runScript"
 import { nextEvent, spawnEvent } from "./scriptedStream"
-import { computeForceLayout } from "./forceLayout"
+import { PARTICIPANTS } from "./participants"
+import { layoutFor } from "./hexLayout"
 
 const MIN_EMIT_MS = 90
 const MAX_EMIT_MS = 480
@@ -21,38 +22,30 @@ function computeEmitInterval(activeCount: number): number {
 	return Math.max(MIN_EMIT_MS, MAX_EMIT_MS / Math.max(1, activeCount))
 }
 
+// Pre-cache the canonical pixel position of every participant once. Used to
+// pace ripple → subscriber timing (delay = distance / speed).
+const POSITIONS = new Map(
+	PARTICIPANTS.map((p) => [p.id, layoutFor(p.ring, p.ringIndex)] as const),
+)
+const DISTANCE_CACHE = new Map<string, number>()
+function distance(a: string, b: string): number {
+	if (a === b) return 0
+	const key = a < b ? `${a}|${b}` : `${b}|${a}`
+	let d = DISTANCE_CACHE.get(key)
+	if (d !== undefined) return d
+	const pa = POSITIONS.get(a)
+	const pb = POSITIONS.get(b)
+	if (!pa || !pb) return 0
+	d = Math.hypot(pa.x - pb.x, pa.y - pb.y)
+	DISTANCE_CACHE.set(key, d)
+	return d
+}
+
 export function useReplayDriver() {
 	const playing = useReplayClock((s) => s.playing)
 	const prevActiveRef = useRef<Set<string>>(new Set())
 	const triggeredRef = useRef<Map<string, Set<string>>>(new Map())
 
-	// Cache distances between all participant pairs once layout converges.
-	const distancesRef = useRef<Map<string, number> | null>(null)
-	if (!distancesRef.current) {
-		const layout = computeForceLayout()
-		const cache = new Map<string, number>()
-		const ids = [...layout.positions.keys()]
-		for (let i = 0; i < ids.length; i++) {
-			for (let j = i + 1; j < ids.length; j++) {
-				const a = ids[i]
-				const b = ids[j]
-				const pa = layout.positions.get(a)!
-				const pb = layout.positions.get(b)!
-				const d = Math.hypot(pa.x - pb.x, pa.y - pb.y)
-				const key = a < b ? `${a}|${b}` : `${b}|${a}`
-				cache.set(key, d)
-			}
-		}
-		distancesRef.current = cache
-	}
-
-	function getDistance(a: string, b: string): number {
-		if (a === b) return 0
-		const key = a < b ? `${a}|${b}` : `${b}|${a}`
-		return distancesRef.current!.get(key) ?? 0
-	}
-
-	// GC firing/ripples regardless of playing state.
 	useEffect(() => {
 		const gc = setInterval(() => {
 			useReplayClock.getState().tick(performance.now())
@@ -85,7 +78,6 @@ export function useReplayDriver() {
 			}
 			state.setSimTime(nextSim)
 
-			// Lifecycle states for this frame.
 			const states: Record<string, "hidden" | "active" | "completed"> = {}
 			const activeIds: string[] = []
 			for (const script of RUN_SCRIPT) {
@@ -115,8 +107,9 @@ export function useReplayDriver() {
 				timeUntilEmit = computeEmitInterval(activeIds.length)
 			}
 
-			// Ripple propagation — trigger each subscriber when the ripple's
-			// expanding front-edge reaches them.
+			// Ripple → subscriber pacing. As the front-edge of the ripple expands
+			// from the source at RIPPLE_SPEED_PX_PER_SEC, each subscriber lights
+			// up at the moment the wave reaches its centre.
 			const ripples = state.activeRipples
 			for (const ripple of ripples) {
 				let triggered = triggeredRef.current.get(ripple.id)
@@ -127,7 +120,7 @@ export function useReplayDriver() {
 				for (const subId of ripple.subscriberIds) {
 					if (triggered.has(subId)) continue
 					if (!states[subId] || states[subId] === "hidden") continue
-					const dist = getDistance(ripple.sourceId, subId)
+					const dist = distance(ripple.sourceId, subId)
 					const delayMs = (dist / RIPPLE_SPEED_PX_PER_SEC) * 1000
 					if (wall - ripple.at >= delayMs) {
 						triggered.add(subId)
@@ -136,7 +129,6 @@ export function useReplayDriver() {
 				}
 			}
 
-			// Drain stale triggered entries when the map grows.
 			if (triggeredRef.current.size > 80) {
 				const activeRippleIds = new Set(ripples.map((r) => r.id))
 				for (const key of triggeredRef.current.keys()) {
