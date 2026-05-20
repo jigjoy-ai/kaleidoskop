@@ -14,6 +14,8 @@ export const RIPPLE_SPEED_PX_PER_SEC = 760
 export const RIPPLE_MAX_RADIUS = 360
 export const RIPPLE_VISUAL_DURATION_MS = 700
 
+export type SourceMode = "demo" | "live" | "connecting" | "error"
+
 interface ReplayState {
 	playing: boolean
 	speed: number
@@ -28,6 +30,15 @@ interface ReplayState {
 	selectedAgentId: string | null
 	pausedFocus: ReplayEvent | null
 	zoom: number
+
+	/**
+	 * Where events are coming from. In "demo" mode the local scripted
+	 * runScript emits via useReplayDriver. In "live" mode the WS client
+	 * pushes events from the backend; useReplayDriver becomes a no-op
+	 * for emissions (but still GCs firing/ripples).
+	 */
+	sourceMode: SourceMode
+	sourceError: string | null
 
 	togglePlaying: () => void
 	setSpeed: (s: number) => void
@@ -45,6 +56,8 @@ interface ReplayState {
 	zoomIn: () => void
 	zoomOut: () => void
 	resetZoom: () => void
+
+	setSourceMode: (mode: SourceMode, err?: string | null) => void
 
 	resetRun: () => void
 }
@@ -66,6 +79,9 @@ export const useReplayClock = create<ReplayState>((set, get) => ({
 	selectedAgentId: null,
 	pausedFocus: null,
 	zoom: 1,
+
+	sourceMode: "demo",
+	sourceError: null,
 
 	togglePlaying: () =>
 		set((s) => {
@@ -141,6 +157,9 @@ export const useReplayClock = create<ReplayState>((set, get) => ({
 	zoomOut: () =>
 		set((s) => ({ zoom: clamp(s.zoom - ZOOM_STEP, ZOOM_MIN, ZOOM_MAX) })),
 	resetZoom: () => set({ zoom: 1 }),
+
+	setSourceMode: (mode, err = null) =>
+		set({ sourceMode: mode, sourceError: err }),
 
 	resetRun: () =>
 		set({
