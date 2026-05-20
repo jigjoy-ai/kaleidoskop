@@ -1,7 +1,8 @@
 import { motion } from "framer-motion"
-import { HEX_SIZE, hexVertices } from "../lib/hexLayout"
+import { hexVertices } from "../lib/hexLayout"
+import { HEX_SIZE } from "../lib/forceLayout"
+import type { AgentLifeState } from "../lib/replayClock"
 import type { Participant, PixelCoord } from "../lib/types"
-import type { AgentLifeState } from "../lib/runScript"
 
 interface Props {
 	participant: Participant
@@ -15,14 +16,17 @@ interface Props {
 }
 
 const STROKE_IDLE = "#2c2c3a"
-const STROKE_IDLE_CENTRE = "#3a3a4c"
+const STROKE_IDLE_HUB = "#3a3a4c"
 const STROKE_HIDDEN = "#1a1a23"
 const STROKE_COMPLETED = "#3e7a4c"
 
-function idleStrokeFor(participant: Participant, lifeState: AgentLifeState): string {
+function idleStrokeFor(
+	participant: Participant,
+	lifeState: AgentLifeState,
+): string {
 	if (lifeState === "hidden") return STROKE_HIDDEN
 	if (lifeState === "completed") return STROKE_COMPLETED
-	return participant.ring === 0 ? STROKE_IDLE_CENTRE : STROKE_IDLE
+	return participant.role === "conductor" ? STROKE_IDLE_HUB : STROKE_IDLE
 }
 
 function labelColorFor(
@@ -34,8 +38,9 @@ function labelColorFor(
 	if (firing || isSelected) return "#f6f6fb"
 	if (lifeState === "hidden") return "#3a3a45"
 	if (lifeState === "completed") return "#7fae8c"
-	if (participant.ring === 0) return "#d6d6e0"
-	if (participant.ring === 1) return "#a4a4b4"
+	if (participant.role === "conductor") return "#d6d6e0"
+	if (participant.role === "observer" || participant.role === "driver")
+		return "#a4a4b4"
 	return "#7c7c8a"
 }
 
@@ -52,7 +57,7 @@ export function HexParticipant({
 	const firing = firingColor !== null && lifeState === "active"
 	const idleStroke = idleStrokeFor(participant, lifeState)
 	const strokeColor = firing ? (firingColor as string) : idleStroke
-	const strokeWidth = firing ? 2.4 : lifeState === "completed" ? 1.6 : 1.2
+	const strokeWidth = firing ? 2.2 : lifeState === "completed" ? 1.5 : 1.1
 
 	let opacity = 1
 	if (lifeState === "hidden") opacity = 0.14
@@ -65,7 +70,11 @@ export function HexParticipant({
 		isSelected,
 	)
 	const fontSize =
-		participant.ring === 0 ? 13 : participant.ring === 1 ? 12 : 11
+		participant.role === "conductor"
+			? 12
+			: participant.role === "observer" || participant.role === "driver"
+				? 11
+				: 10
 	const interactive = lifeState !== "hidden"
 
 	return (
@@ -88,23 +97,23 @@ export function HexParticipant({
 					stroke: strokeColor,
 					strokeWidth,
 					filter: firing
-						? `drop-shadow(0 0 10px ${firingColor})`
+						? `drop-shadow(0 0 9px ${firingColor})`
 						: isSelected
-							? `drop-shadow(0 0 8px ${STROKE_IDLE_CENTRE})`
+							? `drop-shadow(0 0 7px ${STROKE_IDLE_HUB})`
 							: "drop-shadow(0 0 0 transparent)",
 				}}
-				transition={{ duration: frozen ? 0 : 0.25, ease: "easeOut" }}
+				transition={{ duration: frozen ? 0 : 0.22, ease: "easeOut" }}
 			/>
 			{firing && !frozen && (
 				<motion.polygon
 					points={hexVertices(0, 0, HEX_SIZE)}
 					fill="none"
 					stroke={firingColor as string}
-					strokeWidth={1.8}
+					strokeWidth={1.6}
 					strokeOpacity={0.7}
 					initial={{ scale: 1, opacity: 0.7 }}
-					animate={{ scale: 1.32, opacity: 0 }}
-					transition={{ duration: 0.85, ease: "easeOut" }}
+					animate={{ scale: 1.36, opacity: 0 }}
+					transition={{ duration: 0.7, ease: "easeOut" }}
 					style={{ transformOrigin: "0px 0px" }}
 				/>
 			)}
@@ -116,9 +125,9 @@ export function HexParticipant({
 					fill={labelColor}
 					fontSize={fontSize}
 					fontFamily="ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace"
-					fontWeight={participant.ring === 0 ? 600 : 500}
+					fontWeight={participant.role === "conductor" ? 600 : 500}
 					style={{
-						letterSpacing: participant.ring === 0 ? "0.02em" : 0,
+						letterSpacing: participant.role === "conductor" ? "0.02em" : 0,
 					}}
 				>
 					{participant.label}
