@@ -1,7 +1,6 @@
 import { motion } from "framer-motion"
-import { hexVertices } from "../lib/hexLayout"
-import { HEX_SIZE } from "../lib/forceLayout"
-import type { AgentLifeState } from "../lib/replayClock"
+import { HEX_SIZE, hexVertices } from "../lib/hexLayout"
+import type { AgentLifeState } from "../lib/runScript"
 import type { Participant, PixelCoord } from "../lib/types"
 
 interface Props {
@@ -57,7 +56,7 @@ export function HexParticipant({
 	const firing = firingColor !== null && lifeState === "active"
 	const idleStroke = idleStrokeFor(participant, lifeState)
 	const strokeColor = firing ? (firingColor as string) : idleStroke
-	const strokeWidth = firing ? 2.2 : lifeState === "completed" ? 1.5 : 1.1
+	const strokeWidth = firing ? 2.4 : lifeState === "completed" ? 1.6 : 1.2
 
 	let opacity = 1
 	if (lifeState === "hidden") opacity = 0.14
@@ -69,12 +68,11 @@ export function HexParticipant({
 		firing,
 		isSelected,
 	)
-	const fontSize =
-		participant.role === "conductor"
-			? 12
-			: participant.role === "observer" || participant.role === "driver"
-				? 11
-				: 10
+	let fontSize: number
+	if (participant.role === "conductor") fontSize = 13
+	else if (participant.role === "observer") fontSize = 12
+	else if (participant.role === "driver") fontSize = 11
+	else fontSize = 11
 	const interactive = lifeState !== "hidden"
 
 	return (
@@ -97,23 +95,23 @@ export function HexParticipant({
 					stroke: strokeColor,
 					strokeWidth,
 					filter: firing
-						? `drop-shadow(0 0 9px ${firingColor})`
+						? `drop-shadow(0 0 10px ${firingColor})`
 						: isSelected
-							? `drop-shadow(0 0 7px ${STROKE_IDLE_HUB})`
+							? `drop-shadow(0 0 8px ${STROKE_IDLE_HUB})`
 							: "drop-shadow(0 0 0 transparent)",
 				}}
-				transition={{ duration: frozen ? 0 : 0.22, ease: "easeOut" }}
+				transition={{ duration: frozen ? 0 : 0.25, ease: "easeOut" }}
 			/>
 			{firing && !frozen && (
 				<motion.polygon
 					points={hexVertices(0, 0, HEX_SIZE)}
 					fill="none"
 					stroke={firingColor as string}
-					strokeWidth={1.6}
+					strokeWidth={1.8}
 					strokeOpacity={0.7}
 					initial={{ scale: 1, opacity: 0.7 }}
-					animate={{ scale: 1.36, opacity: 0 }}
-					transition={{ duration: 0.7, ease: "easeOut" }}
+					animate={{ scale: 1.32, opacity: 0 }}
+					transition={{ duration: 0.85, ease: "easeOut" }}
 					style={{ transformOrigin: "0px 0px" }}
 				/>
 			)}
@@ -127,7 +125,8 @@ export function HexParticipant({
 					fontFamily="ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace"
 					fontWeight={participant.role === "conductor" ? 600 : 500}
 					style={{
-						letterSpacing: participant.role === "conductor" ? "0.02em" : 0,
+						letterSpacing:
+							participant.role === "conductor" ? "0.02em" : 0,
 					}}
 				>
 					{participant.label}

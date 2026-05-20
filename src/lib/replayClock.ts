@@ -1,5 +1,6 @@
 import { create } from "zustand"
 import type { EventBucket, FiringPulse, ReplayEvent } from "./types"
+import type { AgentLifeState } from "./runScript"
 
 const MAX_RECENT = 60
 const FIRE_HOLD_MS = 700
@@ -10,10 +11,8 @@ export const ZOOM_MAX = 2.4
 export const ZOOM_STEP = 0.15
 
 export const RIPPLE_SPEED_PX_PER_SEC = 760
-export const RIPPLE_MAX_RADIUS = 520
-export const RIPPLE_VISUAL_DURATION_MS = 750
-
-export type AgentLifeState = "hidden" | "active" | "completed"
+export const RIPPLE_MAX_RADIUS = 360
+export const RIPPLE_VISUAL_DURATION_MS = 700
 
 interface ReplayState {
 	playing: boolean

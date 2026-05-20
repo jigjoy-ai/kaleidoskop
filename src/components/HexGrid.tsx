@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef } from "react"
 import { PARTICIPANTS } from "../lib/participants"
-import { computeForceLayout, viewBoxString } from "../lib/forceLayout"
+import { VIEWBOX, layoutFor } from "../lib/hexLayout"
 import { BUCKET_COLOR } from "../lib/eventTypes"
 import { useReplayClock } from "../lib/replayClock"
 import { HexParticipant } from "./HexParticipant"
 import { PausedHighlight } from "./PausedHighlight"
 import { RippleWave } from "./RippleWave"
+import type { PixelCoord } from "../lib/types"
 
 export function HexGrid() {
 	const firing = useReplayClock((s) => s.firing)
@@ -20,9 +21,12 @@ export function HexGrid() {
 	const zoomOut = useReplayClock((s) => s.zoomOut)
 
 	const wrapperRef = useRef<HTMLDivElement>(null)
-	const layout = useMemo(() => computeForceLayout(), [])
-	const positions = layout.positions
-	const viewBox = viewBoxString(layout.viewBox)
+
+	const positions = useMemo(() => {
+		const map = new Map<string, PixelCoord>()
+		for (const p of PARTICIPANTS) map.set(p.id, layoutFor(p.ring, p.ringIndex))
+		return map
+	}, [])
 
 	useEffect(() => {
 		const el = wrapperRef.current
@@ -36,8 +40,6 @@ export function HexGrid() {
 		return () => el.removeEventListener("wheel", handler)
 	}, [zoomIn, zoomOut])
 
-	// Compute the frozen "lit" set during pause: source + every subscriber of
-	// the focused event. Each gets force-coloured by the event's bucket.
 	const frozenColors = new Map<string, string>()
 	if (!playing && pausedFocus) {
 		const color = BUCKET_COLOR[pausedFocus.bucket]
@@ -52,18 +54,18 @@ export function HexGrid() {
 			ref={wrapperRef}
 			className="w-full h-full"
 			style={{
-				transform: `scale(${zoom})`,
+				transform: `rotate(-4deg) scale(${zoom})`,
 				transformOrigin: "center center",
 				transition: "transform 0.18s ease-out",
 			}}
 			onClick={() => selectAgent(null)}
 		>
 			<svg
-				viewBox={viewBox}
+				viewBox={VIEWBOX}
 				className="w-full h-full"
 				preserveAspectRatio="xMidYMid meet"
 				role="img"
-				aria-label="Mozaik participants on the event bus, positioned by subscription overlap"
+				aria-label="Mozaik participants laid out as a tessellated hexagonal honeycomb"
 			>
 				<defs>
 					<linearGradient id="hex-fill" x1="0" y1="0" x2="0" y2="1">
@@ -72,8 +74,6 @@ export function HexGrid() {
 					</linearGradient>
 				</defs>
 
-				{/* Live ripples — expanding rings from each emitter. Suppressed during
-				    pause since they'd just tween to invisible. */}
 				{playing && (
 					<g>
 						{activeRipples.map((event) => {

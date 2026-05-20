@@ -1,15 +1,85 @@
-// Hex polygon math used by HexParticipant. Positioning of nodes in the canvas
-// is owned by the force-directed layout (lib/forceLayout.ts) — there's no
-// ring-based layoutFor anymore.
+import type { Participant, PixelCoord } from "./types"
 
-const POLYGON_INSET = 0.96
+// Circumradius (centre → vertex) of every hex in the grid.
+export const HEX_SIZE = 48
+
+// Visual inset on the polygon. The honeycomb math is tight tessellation; this
+// shrinks each drawn polygon a touch so adjacent cells render a hairline gap
+// instead of merging strokes.
+const POLYGON_INSET = 0.955
+
 const SQRT3 = Math.sqrt(3)
 
-export const SQRT3_CONST = SQRT3
+interface Axial {
+	q: number
+	r: number
+}
+
+const CUBE_DIRECTIONS: readonly Axial[] = [
+	{ q: +1, r: 0 },
+	{ q: +1, r: -1 },
+	{ q: 0, r: -1 },
+	{ q: -1, r: 0 },
+	{ q: -1, r: +1 },
+	{ q: 0, r: +1 },
+]
+
+function ringCoords(radius: number): Axial[] {
+	if (radius === 0) return [{ q: 0, r: 0 }]
+	const results: Axial[] = []
+	let hex: Axial = {
+		q: CUBE_DIRECTIONS[4].q * radius,
+		r: CUBE_DIRECTIONS[4].r * radius,
+	}
+	for (let side = 0; side < 6; side++) {
+		for (let step = 0; step < radius; step++) {
+			results.push({ ...hex })
+			hex = {
+				q: hex.q + CUBE_DIRECTIONS[side].q,
+				r: hex.r + CUBE_DIRECTIONS[side].r,
+			}
+		}
+	}
+	return results
+}
+
+// Pointy-top axial → pixel.
+function axialToPixel(coord: Axial, size = HEX_SIZE): PixelCoord {
+	return {
+		x: size * SQRT3 * (coord.q + coord.r / 2),
+		y: size * 1.5 * coord.r,
+	}
+}
+
+const RING_COORDS: readonly (readonly Axial[])[] = [
+	ringCoords(0),
+	ringCoords(1),
+	ringCoords(2),
+]
+
+// Each participant carries a ring (0|1|2) and ringIndex; we look up the
+// corresponding axial coord, convert to pixel, done. This is the canonical
+// layout function — there's intentionally no force-simulated fallback. The
+// 19-cell concentric honeycomb shape is the visual contract.
+export function layoutFor(
+	ring: 0 | 1 | 2,
+	ringIndex: number,
+): PixelCoord {
+	const r = RING_COORDS[ring]
+	const coord = r[ringIndex]
+	return axialToPixel(coord)
+}
+
+export function layoutForParticipant(p: Participant & {
+	ring?: 0 | 1 | 2
+	ringIndex?: number
+}): PixelCoord {
+	return layoutFor(p.ring ?? 0, p.ringIndex ?? 0)
+}
 
 // Pointy-top hex vertices around (cx, cy). The first vertex sits directly
 // above centre, others march clockwise.
-export function hexVertices(cx: number, cy: number, size: number): string {
+export function hexVertices(cx: number, cy: number, size = HEX_SIZE): string {
 	const r = size * POLYGON_INSET
 	const points: string[] = []
 	for (let i = 0; i < 6; i++) {
@@ -20,3 +90,8 @@ export function hexVertices(cx: number, cy: number, size: number): string {
 	}
 	return points.join(" ")
 }
+
+const MAX_EXTENT = 2 * SQRT3 * HEX_SIZE + HEX_SIZE
+const PADDING = HEX_SIZE * 0.45
+export const VIEWBOX_SIZE = Math.ceil((MAX_EXTENT + PADDING) * 2)
+export const VIEWBOX = `${-VIEWBOX_SIZE / 2} ${-VIEWBOX_SIZE / 2} ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}`

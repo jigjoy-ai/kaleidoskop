@@ -39,6 +39,8 @@ export interface Participant {
 	id: string
 	label: string
 	role: ParticipantRole
+	ring: 0 | 1 | 2
+	ringIndex: number
 }
 
 export interface ReplayEvent {
@@ -56,9 +58,6 @@ export interface PixelCoord {
 	y: number
 }
 
-// Firing entry — one per active pulse on a participant. Keyed by participant
-// id in the store, this captures both the time and the colour bucket so the
-// hex pulse renders in the right hue.
 export interface FiringPulse {
 	at: number
 	bucket: EventBucket
