@@ -31,7 +31,9 @@ export const BUCKETS: readonly EventBucket[] = Object.keys(
 	BUCKET_COLOR,
 ) as readonly EventBucket[]
 
-// Map every domain event to its visual bucket.
+// Map every domain event to its visual bucket. Includes the extra LLM/CLI
+// passthrough types that show up in real baro audit logs but aren't part of
+// the BusEvent taxonomy.
 export const BUCKET_OF: Record<DomainEvent, EventBucket> = {
 	agent_state: "lifecycle",
 	story_spawn_request: "spawn",
@@ -51,7 +53,11 @@ export const BUCKET_OF: Record<DomainEvent, EventBucket> = {
 	replan: "replan",
 	coordination: "replan",
 	agent_targeted_message: "message",
+	conductor_state: "lifecycle",
+	claude_system: "lifecycle",
+	claude_rate_limit: "lifecycle",
 	error: "error",
+	unknown: "lifecycle",
 }
 
 export const DOMAIN_LABEL: Record<DomainEvent, string> = {
@@ -73,5 +79,9 @@ export const DOMAIN_LABEL: Record<DomainEvent, string> = {
 	replan: "ReplanItem",
 	coordination: "CoordinationItem",
 	agent_targeted_message: "AgentTargetedMessageItem",
+	conductor_state: "ConductorStateItem",
+	claude_system: "ClaudeSystemItem",
+	claude_rate_limit: "ClaudeRateLimitItem",
 	error: "ErrorItem",
+	unknown: "Unknown",
 }

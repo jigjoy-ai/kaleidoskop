@@ -134,6 +134,14 @@ function payloadFor(domain: DomainEvent, sourceLabel: string): string {
 			return `Sentry → overlap on src/components/HexGrid.tsx`
 		case "agent_targeted_message":
 			return `${sourceLabel} → ${DOMAIN_LABEL[domain]}`
+		case "conductor_state":
+			return `Conductor → phase transition`
+		case "claude_system":
+			return `${sourceLabel} → claude init`
+		case "claude_rate_limit":
+			return `${sourceLabel} → rate limit info`
+		case "unknown":
+			return `${sourceLabel} → ${DOMAIN_LABEL[domain]}`
 		case "error":
 			return `${sourceLabel} raised "rate limit; retrying"`
 	}

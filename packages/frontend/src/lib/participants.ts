@@ -120,7 +120,11 @@ export const SUBSCRIBERS: Record<DomainEvent, readonly string[]> = {
 	replan: ["conductor", "auditor"],
 	coordination: ["auditor"],
 	agent_targeted_message: ["auditor"],
+	conductor_state: ["auditor"],
+	claude_system: ["auditor"],
+	claude_rate_limit: ["auditor"],
 	error: ["auditor"],
+	unknown: ["auditor"],
 }
 
 export const EMITTERS: Record<DomainEvent, readonly string[]> = {
@@ -142,5 +146,9 @@ export const EMITTERS: Record<DomainEvent, readonly string[]> = {
 	replan: ["surgeon"],
 	coordination: ["sentry"],
 	agent_targeted_message: ["operator", "conductor", "critic", "librarian"],
+	conductor_state: ["conductor"],
+	claude_system: STORY_IDS,
+	claude_rate_limit: STORY_IDS,
 	error: [...STORY_IDS, "conductor"],
+	unknown: ["conductor"],
 }
