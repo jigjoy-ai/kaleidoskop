@@ -4,11 +4,22 @@ import { useReplayClock } from "../lib/replayClock"
 
 export function EventInspector() {
 	const recent = useReplayClock((s) => s.recent)
+	const playing = useReplayClock((s) => s.playing)
+	const pausedFocus = useReplayClock((s) => s.pausedFocus)
+	const setPausedFocus = useReplayClock((s) => s.setPausedFocus)
+
+	const focusedId = pausedFocus?.id ?? null
+	const canFocus = !playing
 
 	return (
 		<aside className="w-80 shrink-0 border-l border-[var(--color-border)] bg-[var(--color-bg-elev)] flex flex-col">
-			<header className="px-4 py-3 border-b border-[var(--color-border)] text-xs uppercase tracking-[0.2em] text-[var(--color-fg-muted)]">
-				recent events
+			<header className="px-4 py-3 border-b border-[var(--color-border)] text-xs uppercase tracking-[0.2em] text-[var(--color-fg-muted)] flex items-center justify-between">
+				<span>recent events</span>
+				{canFocus && (
+					<span className="text-[10px] tracking-wider text-[var(--color-accent)]">
+						click to focus
+					</span>
+				)}
 			</header>
 			<div className="flex-1 overflow-y-auto">
 				{recent.length === 0 && (
@@ -20,10 +31,24 @@ export function EventInspector() {
 					const color = EVENT_COLOR[e.type]
 					const source = PARTICIPANT_BY_ID.get(e.sourceId)?.label ?? e.sourceId
 					const target = PARTICIPANT_BY_ID.get(e.targetId)?.label ?? e.targetId
+					const isFocused = focusedId === e.id
+
 					return (
-						<div
+						<button
+							type="button"
 							key={e.id}
-							className="px-4 py-2.5 border-b border-[var(--color-border)] font-mono text-[11px] leading-snug"
+							onClick={() => {
+								if (canFocus) setPausedFocus(e)
+							}}
+							disabled={!canFocus}
+							className={
+								"w-full text-left block px-4 py-2.5 border-b border-[var(--color-border)] font-mono text-[11px] leading-snug transition-colors " +
+								(isFocused
+									? "bg-[var(--color-accent)]/10 border-l-2 border-l-[var(--color-accent)] pl-[14px]"
+									: canFocus
+										? "hover:bg-[#1a1a23] cursor-pointer"
+										: "cursor-default")
+							}
 						>
 							<div className="flex items-center gap-2 mb-1">
 								<span
@@ -51,7 +76,7 @@ export function EventInspector() {
 							<div className="mt-1 text-[var(--color-fg-muted)] line-clamp-2">
 								{e.payload}
 							</div>
-						</div>
+						</button>
 					)
 				})}
 			</div>
