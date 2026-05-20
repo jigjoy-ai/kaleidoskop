@@ -21,14 +21,7 @@ body,
 }
 
 body {
-	background:
-		radial-gradient(
-			ellipse 80% 60% at 50% 40%,
-			#15151f 0%,
-			#0a0a0f 70%
-		),
-		var(--color-bg);
-	background-attachment: fixed;
+	background: #0a0a0f;
 	color: var(--color-fg);
 	font-family: var(--font-sans);
 	font-synthesis: none;
@@ -36,7 +29,6 @@ body {
 	-moz-osx-font-smoothing: grayscale;
 }
 
-/* Smooth scrolling for inspector */
 * {
 	scrollbar-width: thin;
 	scrollbar-color: #2a2a36 transparent;

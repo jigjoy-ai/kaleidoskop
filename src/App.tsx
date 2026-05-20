@@ -1,11 +1,28 @@
+import { useEffect } from "react"
 import { EventInspector } from "./components/EventInspector"
 import { EventLegend } from "./components/EventLegend"
 import { HexGrid } from "./components/HexGrid"
 import { PlaybackControls } from "./components/PlaybackControls"
-import { useMockStream } from "./lib/useMockStream"
+import { ZoomControls } from "./components/ZoomControls"
+import { useReplayDriver } from "./lib/useReplayDriver"
+import { useReplayClock } from "./lib/replayClock"
 
 export default function App() {
-	useMockStream()
+	useReplayDriver()
+	const selectAgent = useReplayClock((s) => s.selectAgent)
+
+	// ESC clears focus, Space toggles play/pause.
+	useEffect(() => {
+		const handler = (e: KeyboardEvent) => {
+			if (e.key === "Escape") selectAgent(null)
+			else if (e.key === " " && !(e.target instanceof HTMLButtonElement)) {
+				e.preventDefault()
+				useReplayClock.getState().togglePlaying()
+			}
+		}
+		window.addEventListener("keydown", handler)
+		return () => window.removeEventListener("keydown", handler)
+	}, [selectAgent])
 
 	return (
 		<div className="h-full flex flex-col">
@@ -15,7 +32,7 @@ export default function App() {
 						mozaik-replay
 					</span>
 					<span className="text-[11px] uppercase tracking-[0.25em] text-[var(--color-fg-muted)]">
-						phase 1 prototype · mock event stream
+						phase 1 prototype · scripted demo run
 					</span>
 				</div>
 				<a
@@ -31,10 +48,11 @@ export default function App() {
 			<EventLegend />
 
 			<div className="flex-1 flex min-h-0">
-				<main className="flex-1 flex items-center justify-center min-w-0 p-6">
+				<main className="relative flex-1 flex items-center justify-center min-w-0 p-6 overflow-hidden">
 					<div className="w-full h-full max-w-[760px] aspect-square">
 						<HexGrid />
 					</div>
+					<ZoomControls />
 				</main>
 				<EventInspector />
 			</div>
