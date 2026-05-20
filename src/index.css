@@ -21,10 +21,23 @@ body,
 }
 
 body {
-	background: var(--color-bg);
+	background:
+		radial-gradient(
+			ellipse 80% 60% at 50% 40%,
+			#15151f 0%,
+			#0a0a0f 70%
+		),
+		var(--color-bg);
+	background-attachment: fixed;
 	color: var(--color-fg);
 	font-family: var(--font-sans);
 	font-synthesis: none;
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
+}
+
+/* Smooth scrolling for inspector */
+* {
+	scrollbar-width: thin;
+	scrollbar-color: #2a2a36 transparent;
 }
