@@ -1,53 +1,99 @@
-import type { Edge, Participant } from "./types"
+import type { DomainEvent, Participant } from "./types"
 
-// Ring 1 participants are listed in the order the hex-layout generator visits
-// the ring (counter-clockwise starting bottom-left). The placement gives a
-// readable clockwise workflow once you trace from Planner → Conductor → Reader
-// → Surgeon → Critic → Finalizer around the centre.
-const RING_1_LABELS = [
-	{ id: "critic", label: "Critic" },
-	{ id: "surgeon", label: "Surgeon" },
-	{ id: "reader", label: "Reader" },
-	{ id: "planner", label: "Planner" },
-	{ id: "finalizer", label: "Finalizer" },
-	{ id: "conductor", label: "Conductor" },
-] as const
-
-export const PARTICIPANTS: Participant[] = [
-	{ id: "architect", label: "Architect", ring: 0, ringIndex: 0 },
-
-	...RING_1_LABELS.map((p, i) => ({
-		id: p.id,
-		label: p.label,
-		ring: 1 as const,
-		ringIndex: i,
-	})),
-
-	...Array.from({ length: 12 }, (_, i) => ({
-		id: `story-${String(i + 1).padStart(2, "0")}`,
-		label: `S${String(i + 1).padStart(2, "0")}`,
-		ring: 2 as const,
-		ringIndex: i,
-	})),
+// Long-lived participants on the Mozaik bus during a baro run. Mirrors the
+// real participant set in baro/packages/baro-orchestrator/src/participants/.
+// Architect, Planner, and Reader are NOT here — they run as one-shot Claude
+// CLI invocations *before* the bus orchestration begins, producing the
+// architecture spec and the story DAG that Conductor then consumes.
+const DRIVERS: Participant[] = [
+	{ id: "conductor", label: "Conductor", role: "conductor" },
+	{ id: "story-factory", label: "StoryFactory", role: "driver" },
+	{ id: "operator", label: "Operator", role: "driver" },
 ]
 
-const RING_1_IDS = PARTICIPANTS.filter((p) => p.ring === 1).map((p) => p.id)
-const RING_2_IDS = PARTICIPANTS.filter((p) => p.ring === 2).map((p) => p.id)
+const OBSERVERS: Participant[] = [
+	{ id: "critic", label: "Critic", role: "observer" },
+	{ id: "surgeon", label: "Surgeon", role: "observer" },
+	{ id: "librarian", label: "Librarian", role: "observer" },
+	{ id: "sentry", label: "Sentry", role: "observer" },
+	{ id: "auditor", label: "Auditor", role: "observer" },
+	{ id: "finalizer", label: "Finalizer", role: "observer" },
+]
 
-// Architect (centre) connects to every ring-1 participant.
-const HUB_EDGES: Edge[] = RING_1_IDS.map((id) => ({
-	sourceId: "architect",
-	targetId: id,
-}))
+const STORY_COUNT = 12
+const STORY_AGENTS: Participant[] = Array.from(
+	{ length: STORY_COUNT },
+	(_, i) => ({
+		id: `story-${String(i + 1).padStart(2, "0")}`,
+		label: `S${String(i + 1).padStart(2, "0")}`,
+		role: "story" as const,
+	}),
+)
 
-// Because ring 2 and ring 1 are both walked in the same direction with the
-// same starting point, dividing by 2 cleanly pairs each ring-2 story agent
-// with its physically-adjacent ring-1 owner.
-const OWNERSHIP_EDGES: Edge[] = RING_2_IDS.map((storyId, i) => ({
-	sourceId: RING_1_IDS[Math.floor(i / 2)],
-	targetId: storyId,
-}))
+export const PARTICIPANTS: Participant[] = [
+	...DRIVERS,
+	...OBSERVERS,
+	...STORY_AGENTS,
+]
 
-export const EDGES: Edge[] = [...HUB_EDGES, ...OWNERSHIP_EDGES]
+export const PARTICIPANT_BY_ID = new Map(
+	PARTICIPANTS.map((p) => [p.id, p]),
+)
 
-export const PARTICIPANT_BY_ID = new Map(PARTICIPANTS.map((p) => [p.id, p]))
+export const STORY_IDS: readonly string[] = STORY_AGENTS.map((p) => p.id)
+export const OBSERVER_IDS: readonly string[] = OBSERVERS.map((p) => p.id)
+export const DRIVER_IDS: readonly string[] = DRIVERS.map((p) => p.id)
+
+// Per-event subscriber sets. Sourced from CORE.md / OBSERVERS.md / types.ts
+// in baro/packages/baro-orchestrator/src/participants. "auditor" subscribes
+// to literally everything (its job is to JSONL the run); we include it
+// explicitly per event so the emit-site has the full subscriber list.
+//
+// For the dynamic-recipient events (agent_targeted_message), we pick a
+// plausible story agent at emit time and append it to the list.
+export const SUBSCRIBERS: Record<DomainEvent, readonly string[]> = {
+	agent_state: ["sentry", "auditor"],
+	story_spawn_request: ["story-factory", "auditor"],
+	story_spawned: ["auditor"],
+	level_started: ["finalizer", "auditor"],
+	level_completed: ["conductor", "auditor"],
+	run_started: ["finalizer", "auditor"],
+	run_completed: ["finalizer", "conductor", "auditor"],
+	function_call: ["librarian", "sentry", "auditor"],
+	function_call_output: ["librarian", "auditor"],
+	reasoning: ["auditor"],
+	model_message: ["auditor"],
+	agent_result: ["critic", "auditor"],
+	story_result: ["surgeon", "conductor", "finalizer", "auditor"],
+	critique: ["auditor"],
+	knowledge: ["conductor", "auditor"],
+	replan: ["conductor", "auditor"],
+	coordination: ["auditor"],
+	// agent_targeted_message has a recipientId field; we splice in a story id
+	// at emit time. Auditor always in.
+	agent_targeted_message: ["auditor"],
+	error: ["auditor"],
+}
+
+// Emitters per event type — used to assign roles in the scripted run.
+export const EMITTERS: Record<DomainEvent, readonly string[]> = {
+	agent_state: STORY_IDS,
+	story_spawn_request: ["conductor"],
+	story_spawned: ["story-factory"],
+	level_started: ["conductor"],
+	level_completed: ["conductor"],
+	run_started: ["conductor"],
+	run_completed: ["conductor"],
+	function_call: [...STORY_IDS, "critic", "surgeon"],
+	function_call_output: [...STORY_IDS, "critic", "surgeon"],
+	reasoning: STORY_IDS,
+	model_message: STORY_IDS,
+	agent_result: STORY_IDS,
+	story_result: STORY_IDS,
+	critique: ["critic"],
+	knowledge: ["librarian"],
+	replan: ["surgeon"],
+	coordination: ["sentry"],
+	agent_targeted_message: ["operator", "conductor", "critic", "librarian"],
+	error: [...STORY_IDS, "conductor"],
+}

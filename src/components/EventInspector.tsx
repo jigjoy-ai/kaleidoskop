@@ -1,4 +1,4 @@
-import { EVENT_COLOR, EVENT_LABEL } from "../lib/eventColor"
+import { BUCKET_COLOR, BUCKET_LABEL, DOMAIN_LABEL } from "../lib/eventTypes"
 import { PARTICIPANT_BY_ID } from "../lib/participants"
 import { useReplayClock } from "../lib/replayClock"
 
@@ -28,10 +28,11 @@ export function EventInspector() {
 					</div>
 				)}
 				{recent.map((e) => {
-					const color = EVENT_COLOR[e.type]
-					const source = PARTICIPANT_BY_ID.get(e.sourceId)?.label ?? e.sourceId
-					const target = PARTICIPANT_BY_ID.get(e.targetId)?.label ?? e.targetId
+					const color = BUCKET_COLOR[e.bucket]
+					const source =
+						PARTICIPANT_BY_ID.get(e.sourceId)?.label ?? e.sourceId
 					const isFocused = focusedId === e.id
+					const subCount = e.subscriberIds.length
 
 					return (
 						<button
@@ -62,7 +63,7 @@ export function EventInspector() {
 									className="uppercase tracking-wider"
 									style={{ color }}
 								>
-									{EVENT_LABEL[e.type]}
+									{BUCKET_LABEL[e.bucket]}
 								</span>
 								<span className="text-[var(--color-fg-muted)] ml-auto">
 									{e.id}
@@ -70,11 +71,16 @@ export function EventInspector() {
 							</div>
 							<div className="text-[var(--color-fg-muted)]">
 								<span className="text-[var(--color-fg)]">{source}</span>
-								<span className="mx-1">→</span>
-								<span className="text-[var(--color-fg)]">{target}</span>
+								<span className="mx-1">↗</span>
+								<span className="text-[var(--color-fg-muted)]">
+									{subCount} subscriber{subCount === 1 ? "" : "s"}
+								</span>
 							</div>
 							<div className="mt-1 text-[var(--color-fg-muted)] line-clamp-2">
 								{e.payload}
+							</div>
+							<div className="mt-0.5 text-[10px] text-[var(--color-fg-muted)]/60">
+								{DOMAIN_LABEL[e.domain]}
 							</div>
 						</button>
 					)

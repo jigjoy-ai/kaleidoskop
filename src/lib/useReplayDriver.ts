@@ -1,14 +1,17 @@
 import { useEffect, useRef } from "react"
-import { useReplayClock } from "./replayClock"
+import {
+	RIPPLE_SPEED_PX_PER_SEC,
+	useReplayClock,
+} from "./replayClock"
 import {
 	RESET_DELAY_MS,
 	RUN_DURATION_MS,
 	RUN_SCRIPT,
 	agentStateAt,
 	lookupScript,
-	type AgentLifeState,
 } from "./runScript"
 import { nextEvent, spawnEvent } from "./scriptedStream"
+import { computeForceLayout } from "./forceLayout"
 
 const MIN_EMIT_MS = 90
 const MAX_EMIT_MS = 480
@@ -18,15 +21,38 @@ function computeEmitInterval(activeCount: number): number {
 	return Math.max(MIN_EMIT_MS, MAX_EMIT_MS / Math.max(1, activeCount))
 }
 
-// Drives the run-time simulation against the wall clock. Reads playback flags
-// directly from the store (no subscription) so the rAF loop doesn't restart
-// on every state change.
 export function useReplayDriver() {
 	const playing = useReplayClock((s) => s.playing)
 	const prevActiveRef = useRef<Set<string>>(new Set())
+	const triggeredRef = useRef<Map<string, Set<string>>>(new Map())
 
-	// GC the firing/edges arrays regardless of playing state. With nothing being
-	// emitted during pause, this drains the on-screen flashes naturally.
+	// Cache distances between all participant pairs once layout converges.
+	const distancesRef = useRef<Map<string, number> | null>(null)
+	if (!distancesRef.current) {
+		const layout = computeForceLayout()
+		const cache = new Map<string, number>()
+		const ids = [...layout.positions.keys()]
+		for (let i = 0; i < ids.length; i++) {
+			for (let j = i + 1; j < ids.length; j++) {
+				const a = ids[i]
+				const b = ids[j]
+				const pa = layout.positions.get(a)!
+				const pb = layout.positions.get(b)!
+				const d = Math.hypot(pa.x - pb.x, pa.y - pb.y)
+				const key = a < b ? `${a}|${b}` : `${b}|${a}`
+				cache.set(key, d)
+			}
+		}
+		distancesRef.current = cache
+	}
+
+	function getDistance(a: string, b: string): number {
+		if (a === b) return 0
+		const key = a < b ? `${a}|${b}` : `${b}|${a}`
+		return distancesRef.current!.get(key) ?? 0
+	}
+
+	// GC firing/ripples regardless of playing state.
 	useEffect(() => {
 		const gc = setInterval(() => {
 			useReplayClock.getState().tick(performance.now())
@@ -54,12 +80,13 @@ export function useReplayDriver() {
 			if (nextSim > RUN_DURATION_MS + RESET_DELAY_MS) {
 				state.resetRun()
 				prevActiveRef.current = new Set()
+				triggeredRef.current.clear()
 				nextSim = 0
 			}
 			state.setSimTime(nextSim)
 
-			// Compute lifecycle states for this frame.
-			const states: Record<string, AgentLifeState> = {}
+			// Lifecycle states for this frame.
+			const states: Record<string, "hidden" | "active" | "completed"> = {}
 			const activeIds: string[] = []
 			for (const script of RUN_SCRIPT) {
 				const st = agentStateAt(script.id, nextSim)
@@ -68,12 +95,11 @@ export function useReplayDriver() {
 			}
 			state.setAgentStates(states)
 
-			// Spawn-edge flashes: any agent that transitioned hidden→active gets a
-			// spark emitted from its parent so the user sees the propagation.
+			// Spawn ripples for newly-active participants.
 			const currentActive = new Set(activeIds)
 			for (const id of activeIds) {
 				if (prevActiveRef.current.has(id)) continue
-				if (id === "architect") continue
+				if (id === "conductor") continue
 				const parent = lookupScript(id)?.parentId
 				if (parent && currentActive.has(parent)) {
 					state.emit(spawnEvent(wall, parent, id))
@@ -81,12 +107,41 @@ export function useReplayDriver() {
 			}
 			prevActiveRef.current = currentActive
 
-			// Steady-state event stream.
+			// Steady-state events.
 			timeUntilEmit -= dt
 			if (timeUntilEmit <= 0 && activeIds.length > 0) {
 				const event = nextEvent(wall, activeIds, state.selectedAgentId)
 				if (event) state.emit(event)
 				timeUntilEmit = computeEmitInterval(activeIds.length)
+			}
+
+			// Ripple propagation — trigger each subscriber when the ripple's
+			// expanding front-edge reaches them.
+			const ripples = state.activeRipples
+			for (const ripple of ripples) {
+				let triggered = triggeredRef.current.get(ripple.id)
+				if (!triggered) {
+					triggered = new Set([ripple.sourceId])
+					triggeredRef.current.set(ripple.id, triggered)
+				}
+				for (const subId of ripple.subscriberIds) {
+					if (triggered.has(subId)) continue
+					if (!states[subId] || states[subId] === "hidden") continue
+					const dist = getDistance(ripple.sourceId, subId)
+					const delayMs = (dist / RIPPLE_SPEED_PX_PER_SEC) * 1000
+					if (wall - ripple.at >= delayMs) {
+						triggered.add(subId)
+						state.triggerSubscriber(subId, wall, ripple.bucket)
+					}
+				}
+			}
+
+			// Drain stale triggered entries when the map grows.
+			if (triggeredRef.current.size > 80) {
+				const activeRippleIds = new Set(ripples.map((r) => r.id))
+				for (const key of triggeredRef.current.keys()) {
+					if (!activeRippleIds.has(key)) triggeredRef.current.delete(key)
+				}
 			}
 
 			frameId = requestAnimationFrame(tickFrame)

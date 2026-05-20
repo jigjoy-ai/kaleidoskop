@@ -1,14 +1,19 @@
 import { create } from "zustand"
-import type { ReplayEvent } from "./types"
-import type { AgentLifeState } from "./runScript"
+import type { EventBucket, FiringPulse, ReplayEvent } from "./types"
 
 const MAX_RECENT = 60
 const FIRE_HOLD_MS = 700
-const EDGE_HOLD_MS = 900
+const RIPPLE_LIFE_MS = 1300
 
 export const ZOOM_MIN = 0.55
 export const ZOOM_MAX = 2.4
 export const ZOOM_STEP = 0.15
+
+export const RIPPLE_SPEED_PX_PER_SEC = 760
+export const RIPPLE_MAX_RADIUS = 520
+export const RIPPLE_VISUAL_DURATION_MS = 750
+
+export type AgentLifeState = "hidden" | "active" | "completed"
 
 interface ReplayState {
 	playing: boolean
@@ -16,8 +21,8 @@ interface ReplayState {
 	eventCount: number
 	simTimeMs: number
 
-	firing: Record<string, number>
-	activeEdges: ReplayEvent[]
+	firing: Record<string, FiringPulse>
+	activeRipples: ReplayEvent[]
 	recent: ReplayEvent[]
 
 	agentState: Record<string, AgentLifeState>
@@ -28,6 +33,7 @@ interface ReplayState {
 	togglePlaying: () => void
 	setSpeed: (s: number) => void
 	emit: (e: ReplayEvent) => void
+	triggerSubscriber: (id: string, at: number, bucket: EventBucket) => void
 	tick: (now: number) => void
 
 	setSimTime: (t: number) => void
@@ -54,7 +60,7 @@ export const useReplayClock = create<ReplayState>((set, get) => ({
 	simTimeMs: 0,
 
 	firing: {},
-	activeEdges: [],
+	activeRipples: [],
 	recent: [],
 
 	agentState: {},
@@ -65,13 +71,10 @@ export const useReplayClock = create<ReplayState>((set, get) => ({
 	togglePlaying: () =>
 		set((s) => {
 			const nextPlaying = !s.playing
-			// When pausing, snap focus to the most-recently emitted event (if any)
-			// so the user immediately sees what was last on the wire.
 			if (!nextPlaying) {
 				const lastEvent = s.recent[0] ?? null
 				return { playing: false, pausedFocus: lastEvent }
 			}
-			// Resuming clears the frozen focus.
 			return { playing: true, pausedFocus: null }
 		}),
 
@@ -82,34 +85,36 @@ export const useReplayClock = create<ReplayState>((set, get) => ({
 			eventCount: s.eventCount + 1,
 			firing: {
 				...s.firing,
-				[event.sourceId]: event.at,
-				[event.targetId]: event.at,
+				[event.sourceId]: { at: event.at, bucket: event.bucket },
 			},
-			activeEdges: [...s.activeEdges, event].slice(-MAX_RECENT),
+			activeRipples: [...s.activeRipples, event].slice(-MAX_RECENT),
 			recent: [event, ...s.recent].slice(0, MAX_RECENT),
 		})),
 
+	triggerSubscriber: (id, at, bucket) =>
+		set((s) => ({ firing: { ...s.firing, [id]: { at, bucket } } })),
+
 	tick: (now) =>
 		set((s) => {
-			const nextFiring: Record<string, number> = {}
-			for (const [id, at] of Object.entries(s.firing)) {
-				if (now - at < FIRE_HOLD_MS) nextFiring[id] = at
+			const nextFiring: Record<string, FiringPulse> = {}
+			for (const [id, pulse] of Object.entries(s.firing)) {
+				if (now - pulse.at < FIRE_HOLD_MS) nextFiring[id] = pulse
 			}
-			const nextEdges = s.activeEdges.filter((e) => now - e.at < EDGE_HOLD_MS)
+			const nextRipples = s.activeRipples.filter(
+				(r) => now - r.at < RIPPLE_LIFE_MS,
+			)
 			if (
 				Object.keys(nextFiring).length === Object.keys(s.firing).length &&
-				nextEdges.length === s.activeEdges.length
+				nextRipples.length === s.activeRipples.length
 			) {
 				return s
 			}
-			return { firing: nextFiring, activeEdges: nextEdges }
+			return { firing: nextFiring, activeRipples: nextRipples }
 		}),
 
 	setSimTime: (t) => set({ simTimeMs: t }),
 	setAgentStates: (states) => {
 		const prev = get().agentState
-		// Skip the set if states haven't changed (shallow keys check).
-		// Most of the time agentState is stable across ticks.
 		let same = Object.keys(prev).length === Object.keys(states).length
 		if (same) {
 			for (const k in states) {
@@ -126,15 +131,14 @@ export const useReplayClock = create<ReplayState>((set, get) => ({
 	selectAgent: (id) =>
 		set((s) => ({
 			selectedAgentId: id,
-			// Selecting an agent clears any frozen event focus — they're separate
-			// scopes of "what am I looking at".
 			pausedFocus: id === null ? s.pausedFocus : null,
 		})),
 
 	setPausedFocus: (e) => set({ pausedFocus: e }),
 
 	setZoom: (z) => set({ zoom: clamp(z, ZOOM_MIN, ZOOM_MAX) }),
-	zoomIn: () => set((s) => ({ zoom: clamp(s.zoom + ZOOM_STEP, ZOOM_MIN, ZOOM_MAX) })),
+	zoomIn: () =>
+		set((s) => ({ zoom: clamp(s.zoom + ZOOM_STEP, ZOOM_MIN, ZOOM_MAX) })),
 	zoomOut: () =>
 		set((s) => ({ zoom: clamp(s.zoom - ZOOM_STEP, ZOOM_MIN, ZOOM_MAX) })),
 	resetZoom: () => set({ zoom: 1 }),
@@ -142,7 +146,7 @@ export const useReplayClock = create<ReplayState>((set, get) => ({
 	resetRun: () =>
 		set({
 			firing: {},
-			activeEdges: [],
+			activeRipples: [],
 			recent: [],
 			eventCount: 0,
 			simTimeMs: 0,
@@ -151,3 +155,5 @@ export const useReplayClock = create<ReplayState>((set, get) => ({
 			agentState: {},
 		}),
 }))
+
+export { FIRE_HOLD_MS }

@@ -1,4 +1,4 @@
-import { EVENT_COLOR, EVENT_LABEL, EVENT_TYPES } from "../lib/eventColor"
+import { BUCKETS, BUCKET_COLOR, BUCKET_LABEL } from "../lib/eventTypes"
 
 export function EventLegend() {
 	return (
@@ -6,19 +6,19 @@ export function EventLegend() {
 			<span className="uppercase tracking-[0.2em] text-[var(--color-fg-muted)] mr-1">
 				events
 			</span>
-			{EVENT_TYPES.map((t) => (
+			{BUCKETS.map((b) => (
 				<span
-					key={t}
+					key={b}
 					className="inline-flex items-center gap-1.5 text-[var(--color-fg-muted)]"
 				>
 					<span
 						className="inline-block size-2 rounded-full"
 						style={{
-							background: EVENT_COLOR[t],
-							boxShadow: `0 0 5px ${EVENT_COLOR[t]}`,
+							background: BUCKET_COLOR[b],
+							boxShadow: `0 0 5px ${BUCKET_COLOR[b]}`,
 						}}
 					/>
-					{EVENT_LABEL[t]}
+					{BUCKET_LABEL[b]}
 				</span>
 			))}
 		</div>
