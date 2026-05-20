@@ -13,7 +13,7 @@
   "dependencies": {
     "@fastify/cors": "^10.0.0",
     "@fastify/websocket": "^11.0.0",
-    "@mozaik-ai/core": "^3.10.1",
+    "@mozaik-ai/core": "^3.10.2",
     "@mozaik-replay/shared": "*",
     "fastify": "^5.2.0"
   },
