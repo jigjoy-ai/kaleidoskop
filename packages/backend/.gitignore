@@ -1,0 +1,6 @@
+node_modules/
+dist/
+
+# Local fs-mode run storage. In dev MOZAIK_REPLAY_STORAGE defaults to
+# `fs` and writes here; in prod we use S3. Don't track uploads.
+storage/
