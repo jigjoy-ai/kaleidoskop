@@ -57,24 +57,24 @@ export default function App() {
 		<div className="h-full flex flex-col">
 			<DropZone />
 
-			<header className="flex items-center justify-between px-5 py-3 border-b border-[var(--color-border)] bg-[var(--color-bg-elev)]">
-				<div className="flex items-baseline gap-3">
-					<span className="font-mono text-sm font-semibold tracking-tight">
+			<header className="flex items-center justify-between gap-2 px-3 sm:px-5 py-2 sm:py-3 border-b border-[var(--color-border)] bg-[var(--color-bg-elev)]">
+				<div className="flex items-baseline gap-2 sm:gap-3 min-w-0">
+					<span className="font-mono text-sm font-semibold tracking-tight shrink-0">
 						kaleidoskop
 					</span>
-					<span className="text-[11px] uppercase tracking-[0.25em] text-[var(--color-fg-muted)]">
+					<span className="hidden sm:inline text-[11px] uppercase tracking-[0.25em] text-[var(--color-fg-muted)] truncate">
 						{subtitle}
 					</span>
 				</div>
-				<div className="flex items-center gap-3">
+				<div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
 					<button
 						type="button"
 						onClick={triggerUploadPicker}
-						className="inline-flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1 font-mono text-[11px] text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] hover:bg-[#1a1a23] transition-colors"
+						className="inline-flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2 sm:px-2.5 py-1 font-mono text-[11px] text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] hover:bg-[#1a1a23] transition-colors"
 						title="Upload an audit-log JSONL file"
 					>
 						<span aria-hidden="true">⬆</span>
-						upload
+						<span className="hidden xs:inline">upload</span>
 					</button>
 					<ShareButton />
 					<SourceModeToggle />
@@ -82,7 +82,7 @@ export default function App() {
 						href="https://github.com/jigjoy-ai/kaleidoskop"
 						target="_blank"
 						rel="noreferrer"
-						className="text-xs font-mono text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] transition-colors"
+						className="hidden md:inline-flex text-xs font-mono text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] transition-colors"
 					>
 						github ↗
 					</a>
@@ -92,8 +92,8 @@ export default function App() {
 			<EventLegend />
 			<RunMetaBanner />
 
-			<div className="flex-1 flex min-h-0">
-				<main className="relative flex-1 flex items-center justify-center min-w-0 p-6 overflow-hidden">
+			<div className="flex-1 flex flex-col md:flex-row min-h-0">
+				<main className="relative flex-1 flex items-center justify-center min-w-0 min-h-0 p-3 sm:p-6 overflow-hidden">
 					<div className="w-full h-full max-w-[760px] aspect-square">
 						<HexGrid />
 					</div>

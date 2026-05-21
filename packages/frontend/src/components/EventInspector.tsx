@@ -12,7 +12,7 @@ export function EventInspector() {
 	const canFocus = !playing
 
 	return (
-		<aside className="w-80 shrink-0 border-l border-[var(--color-border)] bg-[var(--color-bg-elev)] flex flex-col">
+		<aside className="w-full md:w-80 shrink-0 max-h-44 md:max-h-none border-t md:border-t-0 md:border-l border-[var(--color-border)] bg-[var(--color-bg-elev)] flex flex-col">
 			<header className="px-4 py-3 border-b border-[var(--color-border)] text-xs uppercase tracking-[0.2em] text-[var(--color-fg-muted)] flex items-center justify-between">
 				<span>recent events</span>
 				{canFocus && (

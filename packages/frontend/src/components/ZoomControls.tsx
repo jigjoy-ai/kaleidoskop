@@ -11,7 +11,7 @@ export function ZoomControls() {
 
 	return (
 		<div
-			className="absolute bottom-4 right-4 flex items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-bg-elev)]/95 backdrop-blur-sm p-1 font-mono text-xs shadow-lg"
+			className="hidden md:flex absolute bottom-4 right-4 items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-bg-elev)]/95 backdrop-blur-sm p-1 font-mono text-xs shadow-lg"
 			onClick={(e) => e.stopPropagation()}
 		>
 			<button
