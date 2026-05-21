@@ -1,5 +1,10 @@
 import { create } from "zustand"
-import type { EventBucket, FiringPulse, ReplayEvent } from "./types"
+import type {
+	EventBucket,
+	FiringPulse,
+	ReplayEvent,
+	StreamCommand,
+} from "./types"
 import type { AgentLifeState } from "./runScript"
 
 const MAX_RECENT = 60
@@ -40,6 +45,13 @@ interface ReplayState {
 	sourceMode: SourceMode
 	sourceError: string | null
 
+	/**
+	 * Set by the WS client when a live connection opens. PlaybackControls
+	 * uses this to round-trip play/pause/speed commands to the backend
+	 * ReplaySession in live mode; null in demo mode (local timing only).
+	 */
+	backendCommandSender: ((cmd: StreamCommand) => void) | null
+
 	togglePlaying: () => void
 	setSpeed: (s: number) => void
 	emit: (e: ReplayEvent) => void
@@ -58,6 +70,9 @@ interface ReplayState {
 	resetZoom: () => void
 
 	setSourceMode: (mode: SourceMode, err?: string | null) => void
+	setBackendCommandSender: (
+		fn: ((cmd: StreamCommand) => void) | null,
+	) => void
 
 	resetRun: () => void
 }
@@ -82,6 +97,7 @@ export const useReplayClock = create<ReplayState>((set, get) => ({
 
 	sourceMode: "demo",
 	sourceError: null,
+	backendCommandSender: null,
 
 	togglePlaying: () =>
 		set((s) => {
@@ -160,6 +176,7 @@ export const useReplayClock = create<ReplayState>((set, get) => ({
 
 	setSourceMode: (mode, err = null) =>
 		set({ sourceMode: mode, sourceError: err }),
+	setBackendCommandSender: (fn) => set({ backendCommandSender: fn }),
 
 	resetRun: () =>
 		set({
