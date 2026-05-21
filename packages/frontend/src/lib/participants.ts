@@ -1,4 +1,7 @@
 import type { DomainEvent, Participant } from "./types"
+// Re-export the shared, canonical subscriber matrix so scripted-demo
+// renderings stay 1:1 with whatever the backend live mode enriches.
+export { SUBSCRIBERS } from "@mozaik-replay/shared"
 
 // 19-cell honeycomb: 1 + 6 + 12. The visual contract trumps strict role
 // purity — StoryFactory and Operator are real long-lived bus participants
@@ -95,38 +98,6 @@ export const DRIVER_IDS: readonly string[] = PARTICIPANTS.filter(
 	(p) => p.role === "driver",
 ).map((p) => p.id)
 
-// Per-event subscriber sets. Sourced from CORE.md / OBSERVERS.md / types.ts
-// in baro/packages/baro-orchestrator/src/participants. "auditor" subscribes
-// to literally everything (its job is to JSONL the run).
-//
-// For dynamic-recipient events (agent_targeted_message), the scripted stream
-// splices in a plausible story agent at emit time.
-export const SUBSCRIBERS: Record<DomainEvent, readonly string[]> = {
-	agent_state: ["sentry", "auditor"],
-	story_spawn_request: ["story-factory", "auditor"],
-	story_spawned: ["auditor"],
-	level_started: ["finalizer", "auditor"],
-	level_completed: ["conductor", "auditor"],
-	run_started: ["finalizer", "auditor"],
-	run_completed: ["finalizer", "conductor", "auditor"],
-	function_call: ["librarian", "sentry", "auditor"],
-	function_call_output: ["librarian", "auditor"],
-	reasoning: ["auditor"],
-	model_message: ["auditor"],
-	agent_result: ["critic", "auditor"],
-	story_result: ["surgeon", "conductor", "finalizer", "auditor"],
-	critique: ["auditor"],
-	knowledge: ["conductor", "auditor"],
-	replan: ["conductor", "auditor"],
-	coordination: ["auditor"],
-	agent_targeted_message: ["auditor"],
-	conductor_state: ["auditor"],
-	claude_system: ["auditor"],
-	claude_rate_limit: ["auditor"],
-	error: ["auditor"],
-	unknown: ["auditor"],
-}
-
 export const EMITTERS: Record<DomainEvent, readonly string[]> = {
 	agent_state: STORY_IDS,
 	story_spawn_request: ["conductor"],
@@ -146,9 +117,16 @@ export const EMITTERS: Record<DomainEvent, readonly string[]> = {
 	replan: ["surgeon"],
 	coordination: ["sentry"],
 	agent_targeted_message: ["operator", "conductor", "critic", "librarian"],
+	agent_user_message: STORY_IDS,
 	conductor_state: ["conductor"],
 	claude_system: STORY_IDS,
 	claude_rate_limit: STORY_IDS,
+	claude_stream_chunk: STORY_IDS,
+	claude_unknown_event: STORY_IDS,
+	level_compute_request: ["conductor"],
+	run_start_request: ["operator"],
+	finalize_started: ["finalizer"],
+	pr_created: ["finalizer"],
 	error: [...STORY_IDS, "conductor"],
 	unknown: ["conductor"],
 }

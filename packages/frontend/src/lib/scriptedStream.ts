@@ -133,6 +133,7 @@ function payloadFor(domain: DomainEvent, sourceLabel: string): string {
 		case "coordination":
 			return `Sentry → overlap on src/components/HexGrid.tsx`
 		case "agent_targeted_message":
+		case "agent_user_message":
 			return `${sourceLabel} → ${DOMAIN_LABEL[domain]}`
 		case "conductor_state":
 			return `Conductor → phase transition`
@@ -140,6 +141,18 @@ function payloadFor(domain: DomainEvent, sourceLabel: string): string {
 			return `${sourceLabel} → claude init`
 		case "claude_rate_limit":
 			return `${sourceLabel} → rate limit info`
+		case "claude_stream_chunk":
+			return `${sourceLabel} → stream chunk`
+		case "claude_unknown_event":
+			return `${sourceLabel} → claude (unknown)`
+		case "level_compute_request":
+			return `Conductor → level compute request`
+		case "run_start_request":
+			return `${sourceLabel} → RunStartRequest`
+		case "finalize_started":
+			return `Finalizer → composing PR`
+		case "pr_created":
+			return `Finalizer → PR created`
 		case "unknown":
 			return `${sourceLabel} → ${DOMAIN_LABEL[domain]}`
 		case "error":

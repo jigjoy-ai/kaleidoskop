@@ -1,5 +1,9 @@
 import { readFile } from "fs/promises"
-import type { ParticipantInfo, ReplayEvent } from "@mozaik-replay/shared"
+import {
+	SUBSCRIBERS,
+	type ParticipantInfo,
+	type ReplayEvent,
+} from "@mozaik-replay/shared"
 
 import { parseSource } from "./source-mapper.js"
 import { mapItem, summariseItem } from "./item-mapper.js"
@@ -86,18 +90,21 @@ export function parseAuditLogString(raw: string): ParsedRun {
 		const mapped = mapItem(line.item)
 		idCounter += 1
 
+		// Reconstruct the subscriber roster from the static SUBSCRIBERS
+		// matrix — audit logs don't carry per-event subscriber info. Drop
+		// the source itself from the subscriber list if it shows up there
+		// (Mozaik fan-out doesn't deliver an event to its own emitter via
+		// the external channel).
+		const baseSubs = SUBSCRIBERS[mapped.domain] ?? []
+		const subscriberIds = baseSubs.filter((s) => s !== source.id)
+
 		events.push({
 			id: `e${idCounter}`,
 			at,
 			domain: mapped.domain,
 			bucket: mapped.bucket,
 			sourceId: source.id,
-			// Subscriber list isn't reconstructible from the legacy audit log
-			// (the original BusEvent path didn't carry subscriber info). The
-			// frontend resolves it from a baked-in subscription matrix
-			// keyed by domain; we leave this empty here and let the frontend
-			// fill in.
-			subscriberIds: [],
+			subscriberIds,
 			payload: summariseItem(mapped.domain, mapped.fields, source.label),
 			data: mapped.fields,
 		})
