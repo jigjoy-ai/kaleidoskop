@@ -91,9 +91,9 @@ AWS_PROFILE=kaleidoskop-prod \
 9. Pause / play / set-speed / seek all round-trip to the backend — backend's `ReplaySession` halts and re-anchors its wall clock.
 10. Share button copies the URL. When pasted on Slack / Twitter / Discord, the SSR'd `/r/<id>` returns custom OG metadata + a per-run SVG thumbnail showing the actual lifecycle state.
 
-## Deploy
+## Self-hosting
 
-See [`docs/DEPLOY.md`](docs/DEPLOY.md). MVP target: single `t4g.small` EC2 in a new `kaleidoskop-prod` AWS account, S3 bucket for runs, nginx TLS terminator. `kaleidoskop.jigjoy.ai` Route53 A record.
+The repo runs anywhere Node 22 runs. The reference deploy is a small ARM EC2 with an S3 bucket for runs and nginx for TLS — see [`docs/DEPLOY.md`](docs/DEPLOY.md) for the step-by-step we use ourselves. For local development the FS storage backend in `packages/backend/src/storage/` is enough; swap to S3 by setting `KALEIDOSKOP_STORAGE=s3` and the standard AWS env vars.
 
 ## Lineage
 
