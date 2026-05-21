@@ -41,7 +41,12 @@ export function injectOgMeta(tpl: string, input: OgRenderInput): string {
 
 function buildBlock({ runId, publicOrigin, meta }: OgRenderInput): string {
 	const url = `${publicOrigin}/r/${encodeURIComponent(runId)}`
-	const ogImage = `${publicOrigin}/og-image.svg`
+	// Use the per-run dynamic OG SVG when meta is available — Slack /
+	// Discord / Twitter all render SVG OG images. Fall back to the
+	// static brand SVG when meta is missing (e.g. run not in storage).
+	const ogImage = meta
+		? `${publicOrigin}/api/runs/${encodeURIComponent(runId)}/og.svg`
+		: `${publicOrigin}/og-image.svg`
 
 	const title = meta
 		? `Replay ${runId} — ${meta.eventCount} events · ${meta.storyCount} stories · ${formatDuration(meta.durationMs)}`

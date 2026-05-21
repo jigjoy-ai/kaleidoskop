@@ -5,6 +5,7 @@ import { EventInspector } from "./components/EventInspector"
 import { EventLegend } from "./components/EventLegend"
 import { HexGrid } from "./components/HexGrid"
 import { PlaybackControls } from "./components/PlaybackControls"
+import { RunMetaBanner } from "./components/RunMetaBanner"
 import { ShareButton } from "./components/ShareButton"
 import { SourceModeToggle } from "./components/SourceModeToggle"
 import { ZoomControls } from "./components/ZoomControls"
@@ -17,6 +18,16 @@ export default function App() {
 	const runId = params.id ?? null
 	const selectAgent = useReplayClock((s) => s.selectAgent)
 	const sourceMode = useReplayClock((s) => s.sourceMode)
+
+	// When entering a run page, wipe the scripted demo state so the
+	// honeycomb is empty until the user clicks connect. Leaving the run
+	// page (back to `/`) re-arms the demo via useReplayDriver's frame
+	// loop — useEffect dependency on runId handles both directions.
+	useEffect(() => {
+		if (runId) {
+			useReplayClock.getState().resetRun()
+		}
+	}, [runId])
 
 	// ESC clears focus, Space toggles play/pause.
 	useEffect(() => {
@@ -79,6 +90,7 @@ export default function App() {
 			</header>
 
 			<EventLegend />
+			<RunMetaBanner />
 
 			<div className="flex-1 flex min-h-0">
 				<main className="relative flex-1 flex items-center justify-center min-w-0 p-6 overflow-hidden">
