@@ -48,12 +48,14 @@ function buildBlock({ runId, publicOrigin, meta }: OgRenderInput): string {
 		? `${publicOrigin}/api/runs/${encodeURIComponent(runId)}/og.svg`
 		: `${publicOrigin}/og-image.svg`
 
+	// Punchy, brand-led title that reads well in a social card. Numbers
+	// up front so the visual hierarchy is "what scale" → "what it is".
 	const title = meta
-		? `Replay ${runId} — ${meta.eventCount} events · ${meta.storyCount} stories · ${formatDuration(meta.durationMs)}`
-		: `Replay ${runId} — kaleidoskop`
+		? `${meta.storyCount} ${meta.storyCount === 1 ? "story" : "stories"} · ${meta.eventCount} events · ${formatDuration(meta.durationMs)} — kaleidoskop`
+		: `kaleidoskop — agent run replay`
 	const desc = meta
-		? `${meta.participantCount} participants, ${meta.eventCount} bus events, captured ${meta.createdAt.slice(0, 10)}. Replay every Mozaik fan-out in the agent honeycomb.`
-		: `kaleidoskop session ${runId}. Replay every Mozaik fan-out in the agent honeycomb.`
+		? `Replay a baro/Mozaik agent run captured ${meta.createdAt.slice(0, 10)}. ${meta.participantCount} participants firing through a hexagonal event bus. Press play and watch the orchestration unfold.`
+		: `Replay your baro/Mozaik audit logs visually — every bus event ripples through the agent honeycomb at full speed.`
 
 	const t = escapeHtml(title)
 	const d = escapeHtml(desc)

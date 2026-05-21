@@ -95,7 +95,7 @@ export function PlaybackControls() {
 					style={{ left: `${progress}%`, transition: "opacity 120ms" }}
 				/>
 			</div>
-			<div className="flex items-center gap-3 px-4 py-2.5 text-sm">
+			<div className="flex flex-wrap items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 text-sm">
 				<button
 					type="button"
 					onClick={handleTogglePlaying}
@@ -126,7 +126,7 @@ export function PlaybackControls() {
 				<button
 					type="button"
 					onClick={resetRun}
-					className="rounded-md border border-[var(--color-border)] px-3 py-1.5 font-mono text-xs text-[var(--color-fg-muted)] hover:bg-[#1a1a23] transition-colors"
+					className="hidden sm:inline-flex rounded-md border border-[var(--color-border)] px-3 py-1.5 font-mono text-xs text-[var(--color-fg-muted)] hover:bg-[#1a1a23] transition-colors"
 				>
 					reset
 				</button>
