@@ -82,15 +82,13 @@ export function SourceModeToggle() {
 		}
 	}
 
-	// Auto-connect the moment we land on the featured demo run. On `/`
-	// the router redirects to `/r/smoke-test`; the visitor never had a
-	// chance to click "connect" themselves, so triggering it here makes
-	// the landing page show real backend output instead of an idle
-	// honeycomb. Uploaded runs (`/r/r_<id>`) still require an explicit
-	// click — uploaders read the meta banner first, decide when to play.
+	// Auto-connect the moment we land on any /r/:id route. Previously
+	// only the featured smoke-test auto-connected; uploaders had to
+	// hunt for the "connect" button after dropping their file, which
+	// everyone forgot to do. Now all runs share the same behaviour:
+	// render once, start streaming.
 	useEffect(() => {
 		if (
-			isFeatured &&
 			sourceMode === "demo" &&
 			!handleRef.current &&
 			!connectingRef.current
@@ -100,47 +98,51 @@ export function SourceModeToggle() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [runId, sourceMode])
 
-	const disconnect = () => {
-		handleRef.current?.close()
-		handleRef.current = null
-		connectingRef.current = false
-		resetRun()
-		setSourceMode("demo")
-	}
+	// `disconnect` was removed alongside the dismissable pill — the
+	// auto-connect flow makes manual disconnects flicker-loop with
+	// the [runId, sourceMode] effect. Re-introduce it the day we
+	// ship an intentional "pause stream / hold state" control whose
+	// new sourceMode value isn't a re-trigger for connect().
+	void resetRun
+	void setSourceMode
 
-	if (sourceMode === "live" || sourceMode === "connecting") {
-		const label = sourceMode === "live" ? "live" : "connecting…"
-		if (isFeatured) {
-			// Featured-demo: non-clickable status indicator. Same shape
-			// as the dismissable pill so the header layout doesn't shift.
-			return (
-				<span
-					className="inline-flex items-center gap-2 rounded-md border border-[var(--color-accent-dim)] bg-[var(--color-accent)]/15 px-2.5 py-1 font-mono text-[11px] text-[var(--color-fg)] select-none"
-					title="Featured demo · streaming live"
-					aria-live="polite"
-				>
-					<span
-						className="inline-block size-2 rounded-full bg-[var(--color-accent)] animate-pulse"
-						aria-hidden="true"
-					/>
-					{label}
-				</span>
-			)
-		}
+	if (
+		sourceMode === "live" ||
+		sourceMode === "connecting" ||
+		sourceMode === "finished"
+	) {
+		// Status indicator only — non-dismissable on purpose. Auto-
+		// connect fires on any /r/:id, so a clickable disconnect would
+		// flip sourceMode → "demo" → re-fire connect → flicker loop.
+		// To leave a replay, navigate away.
+		const label =
+			sourceMode === "live"
+				? "live"
+				: sourceMode === "connecting"
+					? "connecting…"
+					: "finished"
+		const dot =
+			sourceMode === "finished"
+				? "bg-[var(--color-fg-muted)]"
+				: "bg-[var(--color-accent)] animate-pulse"
+		const title =
+			runId === "smoke-test"
+				? "Featured demo · " + label
+				: sourceMode === "finished"
+					? `Run ${runId} finished — scrub the timeline to replay`
+					: `Streaming run ${runId}`
 		return (
-			<button
-				type="button"
-				onClick={disconnect}
-				className="inline-flex items-center gap-2 rounded-md border border-[var(--color-accent-dim)] bg-[var(--color-accent)]/15 px-2.5 py-1 font-mono text-[11px] text-[var(--color-fg)] hover:bg-[var(--color-accent)]/25 transition-colors"
-				title={`Disconnect (was streaming ${runId})`}
+			<span
+				className="inline-flex items-center gap-2 rounded-md border border-[var(--color-accent-dim)] bg-[var(--color-accent)]/15 px-2.5 py-1 font-mono text-[11px] text-[var(--color-fg)] select-none"
+				title={title}
+				aria-live="polite"
 			>
 				<span
-					className="inline-block size-2 rounded-full bg-[var(--color-accent)] animate-pulse"
+					className={`inline-block size-2 rounded-full ${dot}`}
 					aria-hidden="true"
 				/>
 				{label}
-				<span aria-hidden="true">×</span>
-			</button>
+			</span>
 		)
 	}
 
