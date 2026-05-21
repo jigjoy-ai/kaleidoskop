@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { DropZone, triggerUploadPicker } from "./components/DropZone"
 import { track } from "./lib/analytics"
+import { BUCKETS, BUCKET_COLOR } from "./lib/eventTypes"
 
 const PRODUCTS: readonly { label: string; href: string }[] = [
 	{ label: "jigjoy", href: "https://jigjoy.ai" },
@@ -207,17 +208,27 @@ function HexBackdrop() {
 			col: number
 			steps: number
 			maxSteps: number
+			/** CSS colour applied to every cell this snake fires. One bucket
+			 * colour per snake, so a single snake reads as one "kind" of
+			 * activation propagating through the lattice. */
+			color: string
 		}
 
 		const snakes: Snake[] = []
 
-		const fire = (row: number, col: number) => {
+		const fire = (row: number, col: number, color: string) => {
 			const el = document.getElementById(`hex-bg-${row}-${col}`)
 			if (!el) return
+			el.style.setProperty("--fire-color", color)
 			el.classList.add("hex-bg-fired")
 			window.setTimeout(() => {
 				el.classList.remove("hex-bg-fired")
 			}, SNAKE_LIFE_MS)
+		}
+
+		const pickBucketColor = (): string => {
+			const bucket = BUCKETS[Math.floor(Math.random() * BUCKETS.length)]!
+			return BUCKET_COLOR[bucket]
 		}
 
 		const spawnSnake = () => {
@@ -228,6 +239,7 @@ function HexBackdrop() {
 				maxSteps:
 					MIN_STEPS +
 					Math.floor(Math.random() * (MAX_STEPS - MIN_STEPS + 1)),
+				color: pickBucketColor(),
 			})
 		}
 
@@ -239,7 +251,7 @@ function HexBackdrop() {
 		const tick = window.setInterval(() => {
 			for (let i = snakes.length - 1; i >= 0; i--) {
 				const s = snakes[i]!
-				fire(s.row, s.col)
+				fire(s.row, s.col, s.color)
 				s.steps++
 				if (s.steps >= s.maxSteps) {
 					snakes.splice(i, 1)

@@ -60,11 +60,16 @@ body {
 	will-change: stroke, filter;
 }
 
+/* `--fire-color` is set inline by LandingPage just before adding the
+   `.hex-bg-fired` class, picked from the same BUCKET_COLOR palette the
+   legend / event inspector uses (green=lifecycle, orange=tool_call,
+   cyan=reasoning, etc.). Each snake carries one bucket colour for the
+   length of its run so a single firing chain reads as one event type. */
 .hex-bg-cell.hex-bg-fired {
-	stroke: var(--color-accent);
+	stroke: var(--fire-color, var(--color-accent));
 	stroke-width: 1.4;
-	filter: drop-shadow(0 0 4px var(--color-accent))
-		drop-shadow(0 0 12px rgba(185, 123, 255, 0.55));
+	filter: drop-shadow(0 0 4px var(--fire-color, var(--color-accent)))
+		drop-shadow(0 0 12px var(--fire-color, var(--color-accent)));
 	transition: stroke 80ms ease-in, stroke-width 80ms ease-in,
 		filter 80ms ease-in;
 }
