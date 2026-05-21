@@ -196,12 +196,12 @@ function HexBackdrop() {
 	// random in-bounds neighbour every tick, fades out behind itself. New
 	// snakes spawn occasionally up to a small cap.
 	useEffect(() => {
-		const SNAKE_TICK_MS = 140
-		const SNAKE_LIFE_MS = 700 // glow persists this long before fade
-		const MAX_SNAKES = 4
-		const SPAWN_CHANCE_PER_TICK = 0.32
-		const MAX_STEPS = 14
-		const MIN_STEPS = 6
+		const SNAKE_TICK_MS = 130
+		const SNAKE_LIFE_MS = 900 // glow persists this long before fade
+		const MAX_SNAKES = 12
+		const SPAWN_CHANCE_PER_TICK = 0.85
+		const MAX_STEPS = 22
+		const MIN_STEPS = 10
 
 		interface Snake {
 			row: number
@@ -243,10 +243,9 @@ function HexBackdrop() {
 			})
 		}
 
-		// Seed two snakes immediately so the page isn't blank for the
-		// first 2-3 seconds.
-		spawnSnake()
-		spawnSnake()
+		// Seed a handful of snakes immediately so the page isn't blank for
+		// the first 2-3 seconds and the visitor lands on visible activity.
+		for (let i = 0; i < 6; i++) spawnSnake()
 
 		const tick = window.setInterval(() => {
 			for (let i = snakes.length - 1; i >= 0; i--) {
