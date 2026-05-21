@@ -141,3 +141,24 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# ─────────────────────────────────────────────────────────────────────
+# Secrets / credentials — never commit
+# ─────────────────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+.aws/
+.aws/credentials
+credentials.json
+secrets.json
+*.tfvars
+!*.tfvars.example
+.terraform/
