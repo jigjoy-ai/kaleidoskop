@@ -146,6 +146,11 @@ Environment=PORT=8787
 Environment=MOZAIK_REPLAY_STORAGE=s3
 Environment=S3_BUCKET=mozaik-replay-runs
 Environment=S3_REGION=eu-central-1
+# SPA + OG SSR: backend serves the built frontend AND injects per-run
+# OG metadata into /r/:id responses so social-platform link previews
+# show meaningful titles. Both must be set in prod.
+Environment=MOZAIK_REPLAY_FRONTEND_DIST=/opt/mozaik-replay/frontend
+Environment=MOZAIK_REPLAY_PUBLIC_ORIGIN=https://replay.baro.rs
 ExecStart=/usr/bin/node server.js
 Restart=on-failure
 RestartSec=3
@@ -162,6 +167,9 @@ sudo systemctl status mozaik-replay
 
 ## nginx config
 
+The backend serves both the SPA static assets and the dynamic `/r/:id`
+OG-injected HTML, so nginx is only a TLS terminator + proxy.
+
 `/etc/nginx/sites-available/mozaik-replay`:
 
 ```nginx
@@ -169,19 +177,12 @@ server {
     listen 80;
     server_name replay.baro.rs;
 
-    # Static frontend
-    root /opt/mozaik-replay/frontend;
-    index index.html;
-
+    # Everything goes to the backend — it serves /api/*, /r/:id with
+    # OG metadata injection, and static assets via @fastify/static.
     location / {
-        try_files $uri /index.html;
-    }
-
-    # WebSocket upgrade + proxied API
-    location /api/ {
         proxy_pass http://127.0.0.1:8787;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Upgrade $http_upgrade;       # WS support
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -191,6 +192,10 @@ server {
     }
 }
 ```
+
+(If you ever want nginx caching of static assets, split `/assets/`
+back out and let nginx serve from `/opt/mozaik-replay/frontend/assets/`
+directly. Not necessary at MVP traffic.)
 
 ```bash
 sudo ln -s /etc/nginx/sites-available/mozaik-replay /etc/nginx/sites-enabled/

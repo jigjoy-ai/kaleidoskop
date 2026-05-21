@@ -1,10 +1,11 @@
 import { randomBytes } from "crypto"
 import { readFile } from "fs/promises"
 import { homedir } from "os"
-import { join } from "path"
+import { join, resolve } from "path"
 
 import Fastify, { type FastifyRequest } from "fastify"
 import cors from "@fastify/cors"
+import staticPlugin from "@fastify/static"
 import websocket from "@fastify/websocket"
 import type { WebSocket } from "ws"
 import type {
@@ -13,11 +14,28 @@ import type {
 } from "@mozaik-replay/shared"
 
 import { parseAuditLogString } from "./audit-log/parser.js"
+import { injectOgMeta } from "./og.js"
 import { ReplaySession } from "./replay/engine.js"
 import { createStorageFromEnv, type RunMeta, type RunStorage } from "./storage/index.js"
 
 const HOST = process.env["HOST"] ?? "0.0.0.0"
 const PORT = Number(process.env["PORT"] ?? 8787)
+
+/**
+ * Path to the built frontend's `dist/` (containing index.html + assets/).
+ * When set, the backend serves the SPA AND injects per-run OG metadata
+ * for `/r/:id` so social-platform link previews show meaningful titles.
+ * Leave unset in local dev where Vite serves the SPA on :5173.
+ */
+const FRONTEND_DIST = process.env["MOZAIK_REPLAY_FRONTEND_DIST"]
+
+/**
+ * Public origin used for OG `og:url` and `og:image` absolute URLs.
+ * Defaults to "" which lets the meta tags use relative paths — works
+ * for direct page loads but social crawlers prefer absolute URLs.
+ * Set in production: `MOZAIK_REPLAY_PUBLIC_ORIGIN=https://replay.baro.rs`.
+ */
+const PUBLIC_ORIGIN = process.env["MOZAIK_REPLAY_PUBLIC_ORIGIN"] ?? ""
 
 /**
  * Hardcoded sample run accessible via the magic id `smoke-test`. Kept
@@ -46,12 +64,10 @@ async function buildServer() {
 
 	const storage = createStorageFromEnv()
 	app.log.info(
-		{ storageImpl: storage.constructor.name },
-		"storage backend initialised",
+		{ storageImpl: storage.constructor.name, frontendDist: FRONTEND_DIST ?? null },
+		"backend initialised",
 	)
 
-	// JSONL uploads come as text — register a parser so the Body is the
-	// raw string rather than Fastify rejecting unknown content-types.
 	app.addContentTypeParser(
 		["application/jsonl", "application/x-ndjson", "text/plain"],
 		{ parseAs: "string", bodyLimit: UPLOAD_BODY_LIMIT_BYTES },
@@ -64,6 +80,7 @@ async function buildServer() {
 		mozaik: "3.10.2",
 		storage: storage.constructor.name,
 		sampleLog: SAMPLE_LOG_PATH,
+		frontendDist: FRONTEND_DIST ?? null,
 	}))
 
 	app.post<{ Body: string }>(
@@ -81,17 +98,12 @@ async function buildServer() {
 				}
 			}
 
-			// Validate by parsing — also gives us the meta to persist
-			// alongside without re-reading the file on every GET.
 			let parsed
 			try {
 				parsed = parseAuditLogString(content)
 			} catch (err) {
 				reply.code(400)
-				return {
-					error: "parse_failed",
-					message: (err as Error).message,
-				}
+				return { error: "parse_failed", message: (err as Error).message }
 			}
 			if (parsed.events.length === 0) {
 				reply.code(400)
@@ -138,21 +150,7 @@ async function buildServer() {
 			reply,
 		) => {
 			const { id } = request.params
-			if (id === "smoke-test") {
-				const parsed = await parseAuditLogString(
-					await readFile(SAMPLE_LOG_PATH, "utf8"),
-				)
-				return {
-					id,
-					createdAt: parsed.startedAt,
-					durationMs: parsed.durationMs,
-					participantCount: parsed.participants.length,
-					storyCount: parsed.participants.filter((p) => p.role === "story")
-						.length,
-					eventCount: parsed.events.length,
-					source: SAMPLE_LOG_PATH,
-				}
-			}
+			if (id === "smoke-test") return getSmokeTestMeta(id)
 			const meta = await storage.getMeta(id)
 			if (!meta) {
 				reply.code(404)
@@ -226,14 +224,78 @@ async function buildServer() {
 		},
 	)
 
+	// ------------------------------------------------------------------
+	// SPA + OG SSR. Active only when MOZAIK_REPLAY_FRONTEND_DIST is set
+	// (i.e. production). Dev: Vite serves index.html on :5173 and we
+	// don't get OG injection there.
+	// ------------------------------------------------------------------
+	if (FRONTEND_DIST) {
+		const distRoot = resolve(FRONTEND_DIST)
+		await app.register(staticPlugin, {
+			root: distRoot,
+			prefix: "/",
+			wildcard: false,
+			decorateReply: false,
+		})
+
+		// Cache the index.html template at boot so /r/:id doesn't pay a
+		// disk read per request.
+		const indexTemplate = await readFile(join(distRoot, "index.html"), "utf8")
+
+		app.get<{ Params: { id: string } }>(
+			"/r/:id",
+			async (request, reply) => {
+				const { id } = request.params
+				let meta: RunMeta | null
+				if (id === "smoke-test") {
+					const m = await getSmokeTestMeta(id)
+					meta = "error" in m ? null : m
+				} else {
+					meta = await storage.getMeta(id)
+				}
+				const html = injectOgMeta(indexTemplate, {
+					runId: id,
+					publicOrigin: PUBLIC_ORIGIN,
+					meta,
+				})
+				reply.type("text/html; charset=utf-8").send(html)
+			},
+		)
+
+		// SPA root fallback — fastify-static already serves index.html on
+		// "/", but having an explicit handler keeps the OG block clean.
+		// Any other unmatched path falls through to fastify-static's 404.
+		app.setNotFoundHandler((_req, reply) => {
+			reply.type("text/html; charset=utf-8").send(indexTemplate)
+		})
+	}
+
 	return app
+
+	async function getSmokeTestMeta(
+		id: string,
+	): Promise<RunMeta | { error: string; message: string }> {
+		try {
+			const parsed = await parseAuditLogString(
+				await readFile(SAMPLE_LOG_PATH, "utf8"),
+			)
+			return {
+				id,
+				createdAt: parsed.startedAt,
+				durationMs: parsed.durationMs,
+				participantCount: parsed.participants.length,
+				storyCount: parsed.participants.filter((p) => p.role === "story")
+					.length,
+				eventCount: parsed.events.length,
+				sizeBytes: 0,
+				uploadedAt: parsed.startedAt,
+			}
+		} catch (err) {
+			return { error: "smoke_unavailable", message: (err as Error).message }
+		}
+	}
 }
 
-/**
- * Load a run from either the hardcoded sample (id `smoke-test`) or the
- * configured storage backend. Returns parsed events + the source label
- * used in logs.
- */
 async function loadRun(id: string, storage: RunStorage) {
 	if (id === "smoke-test") {
 		const content = await readFile(SAMPLE_LOG_PATH, "utf8")
