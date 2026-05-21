@@ -2,10 +2,13 @@ import { create } from "zustand"
 import type {
 	EventBucket,
 	FiringPulse,
+	Participant,
 	ReplayEvent,
 	StreamCommand,
 } from "./types"
 import type { AgentLifeState } from "./runScript"
+import { DEMO_PARTICIPANTS } from "./participants"
+import { viewBoxFor } from "./hexLayout"
 
 const MAX_RECENT = 60
 const FIRE_HOLD_MS = 700
@@ -61,6 +64,16 @@ interface ReplayState {
 	 */
 	backendCommandSender: ((cmd: StreamCommand) => void) | null
 
+	/**
+	 * Current honeycomb participant roster. Defaults to the scripted
+	 * demo's 19-cell layout (10 stories); the WS client overwrites this
+	 * on `hello` to match the real run's story count, growing into ring
+	 * 3 and ring 4 as needed.
+	 */
+	participants: Participant[]
+	participantById: Map<string, Participant>
+	viewBox: string
+
 	togglePlaying: () => void
 	setSpeed: (s: number) => void
 	emit: (e: ReplayEvent) => void
@@ -70,6 +83,8 @@ interface ReplayState {
 	setSimTime: (t: number) => void
 	setRunDurationMs: (ms: number) => void
 	resetRunDuration: () => void
+	setParticipants: (participants: Participant[]) => void
+	resetParticipants: () => void
 	setAgentStates: (states: Record<string, AgentLifeState>) => void
 	/**
 	 * Replace the entire post-seek state in one shot. Used by the
@@ -105,6 +120,12 @@ interface ReplayState {
 const clamp = (v: number, lo: number, hi: number) =>
 	Math.max(lo, Math.min(hi, v))
 
+function maxRingOf(list: readonly Participant[]): number {
+	let max = 0
+	for (const p of list) if (p.ring > max) max = p.ring
+	return max
+}
+
 export const useReplayClock = create<ReplayState>((set, get) => ({
 	playing: true,
 	speed: 1,
@@ -124,6 +145,10 @@ export const useReplayClock = create<ReplayState>((set, get) => ({
 	sourceMode: "demo",
 	sourceError: null,
 	backendCommandSender: null,
+
+	participants: DEMO_PARTICIPANTS,
+	participantById: new Map(DEMO_PARTICIPANTS.map((p) => [p.id, p])),
+	viewBox: viewBoxFor(maxRingOf(DEMO_PARTICIPANTS)),
 
 	togglePlaying: () =>
 		set((s) => {
@@ -177,6 +202,18 @@ export const useReplayClock = create<ReplayState>((set, get) => ({
 	setSimTime: (t) => set({ simTimeMs: t }),
 	setRunDurationMs: (ms) => set({ runDurationMs: ms }),
 	resetRunDuration: () => set({ runDurationMs: DEFAULT_RUN_DURATION_MS }),
+	setParticipants: (participants) =>
+		set({
+			participants,
+			participantById: new Map(participants.map((p) => [p.id, p])),
+			viewBox: viewBoxFor(maxRingOf(participants)),
+		}),
+	resetParticipants: () =>
+		set({
+			participants: DEMO_PARTICIPANTS,
+			participantById: new Map(DEMO_PARTICIPANTS.map((p) => [p.id, p])),
+			viewBox: viewBoxFor(maxRingOf(DEMO_PARTICIPANTS)),
+		}),
 	applySnapshot: (snap) =>
 		set({
 			simTimeMs: snap.atMs,

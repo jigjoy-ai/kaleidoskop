@@ -3,17 +3,16 @@ import type { DomainEvent, Participant } from "./types"
 // renderings stay 1:1 with whatever the backend live mode enriches.
 export { SUBSCRIBERS } from "@mozaik-replay/shared"
 
-// 19-cell honeycomb: 1 + 6 + 12. The visual contract trumps strict role
-// purity — StoryFactory and Operator are real long-lived bus participants
-// but they share ring 2 with 10 story agents instead of getting their own
-// inner ring. Ring 2 positions are walked counter-clockwise from bottom-left
-// (ringIndex 0) so the algorithmic ordering and the hand-picked placements
-// stay in sync.
+// Honeycomb layout, concentric rings:
+//   ring 0 — Conductor (centre, drives the DAG)
+//   ring 1 — 6 observers (critic, surgeon, librarian, sentry, auditor, finalizer)
+//   ring 2 — Operator at bottom-centre (idx 1), StoryFactory at top-centre (idx 7),
+//            up to 10 stories at the remaining ring-2 slots
+//   ring 3 — 18 story slots when a run has more than 10 stories
+//   ring 4 — 24 more story slots, total cap 52 stories per run
 //
-// ring 0 — Conductor at the centre (drives the DAG)
-// ring 1 — 6 observers
-// ring 2 — Operator at bottom-centre, StoryFactory at top-centre,
-//          10 story agents at the remaining 10 positions
+// All non-story positions are fixed by ring + ringIndex; story slots are
+// allocated in the order discovered, ring 2 first, then 3, then 4.
 
 interface ParticipantDecl extends Participant {}
 
@@ -21,7 +20,6 @@ const RING_0: ParticipantDecl[] = [
 	{ id: "conductor", label: "Conductor", role: "conductor", ring: 0, ringIndex: 0 },
 ]
 
-// Order matters: ringIndex walks counter-clockwise from bottom-left.
 const RING_1: ParticipantDecl[] = [
 	{ id: "critic", label: "Critic", role: "observer", ring: 1, ringIndex: 0 },
 	{ id: "surgeon", label: "Surgeon", role: "observer", ring: 1, ringIndex: 1 },
@@ -31,70 +29,76 @@ const RING_1: ParticipantDecl[] = [
 	{ id: "finalizer", label: "Finalizer", role: "observer", ring: 1, ringIndex: 5 },
 ]
 
-// Ring 2 layout (counter-clockwise from bottom-left, 12 slots):
-//   0  bottom-far-left   → story-01
-//   1  bottom-centre     → Operator
-//   2  bottom-far-right  → story-02
-//   3  right-bottom      → story-03
-//   4  far-right         → story-04
-//   5  right-top         → story-05
-//   6  top-far-right     → story-06
-//   7  top-centre        → StoryFactory
-//   8  top-far-left      → story-07
-//   9  left-top          → story-08
-//  10  far-left          → story-09
-//  11  left-bottom       → story-10
-const STORY_LABELS = [
-	"S01",
-	"S02",
-	"S03",
-	"S04",
-	"S05",
-	"S06",
-	"S07",
-	"S08",
-	"S09",
-	"S10",
-] as const
-const STORY_RING_INDICES = [0, 2, 3, 4, 5, 6, 8, 9, 10, 11] as const
-
-const RING_2: ParticipantDecl[] = [
-	{
-		id: "operator",
-		label: "Operator",
-		role: "driver",
-		ring: 2,
-		ringIndex: 1,
-	},
-	{
-		id: "story-factory",
-		label: "StoryFactory",
-		role: "driver",
-		ring: 2,
-		ringIndex: 7,
-	},
-	...STORY_LABELS.map((label, i) => ({
-		id: `story-${String(i + 1).padStart(2, "0")}`,
-		label,
-		role: "story" as const,
-		ring: 2 as const,
-		ringIndex: STORY_RING_INDICES[i],
-	})),
+const RING_2_FIXED: ParticipantDecl[] = [
+	{ id: "operator", label: "Operator", role: "driver", ring: 2, ringIndex: 1 },
+	{ id: "story-factory", label: "StoryFactory", role: "driver", ring: 2, ringIndex: 7 },
 ]
 
-export const PARTICIPANTS: Participant[] = [...RING_0, ...RING_1, ...RING_2]
+// Free ring-2 slots reserved for stories — walks counter-clockwise from
+// bottom-left, skipping 1 (Operator) and 7 (StoryFactory).
+const RING_2_STORY_INDICES = [0, 2, 3, 4, 5, 6, 8, 9, 10, 11] as const
 
-export const PARTICIPANT_BY_ID = new Map(
-	PARTICIPANTS.map((p) => [p.id, p]),
-)
+// Ring 3 and 4 are pure story rings; all positions get filled in order.
+const RING_3_STORY_INDICES = Array.from({ length: 18 }, (_, i) => i)
+const RING_4_STORY_INDICES = Array.from({ length: 24 }, (_, i) => i)
 
-export const STORY_IDS: readonly string[] = PARTICIPANTS.filter(
+/** Build a story participant declaration. */
+function storySlot(
+	storyNumber: number,
+	ring: number,
+	ringIndex: number,
+): ParticipantDecl {
+	const padded = String(storyNumber).padStart(2, "0")
+	return {
+		id: `story-${padded}`,
+		label: `S${padded}`,
+		role: "story",
+		ring,
+		ringIndex,
+	}
+}
+
+/**
+ * Generate the full participant list for a run with `storyCount` stories.
+ * Stories fill ring 2 (10 slots) first, then ring 3 (18 slots), then ring
+ * 4 (24 slots). Above 52 stories the overflow is dropped — current
+ * audit-log universe maxes out around the high 30s.
+ */
+export function generateParticipants(storyCount: number): Participant[] {
+	const list: ParticipantDecl[] = [...RING_0, ...RING_1, ...RING_2_FIXED]
+	let n = 0
+	const cap = (slotsTaken: number) => Math.min(storyCount - n, slotsTaken)
+	const taken2 = cap(RING_2_STORY_INDICES.length)
+	for (let i = 0; i < taken2; i++) {
+		n++
+		list.push(storySlot(n, 2, RING_2_STORY_INDICES[i]!))
+	}
+	const taken3 = cap(RING_3_STORY_INDICES.length)
+	for (let i = 0; i < taken3; i++) {
+		n++
+		list.push(storySlot(n, 3, RING_3_STORY_INDICES[i]!))
+	}
+	const taken4 = cap(RING_4_STORY_INDICES.length)
+	for (let i = 0; i < taken4; i++) {
+		n++
+		list.push(storySlot(n, 4, RING_4_STORY_INDICES[i]!))
+	}
+	return list
+}
+
+/** Scripted demo baseline: 19 cells, 10 stories. */
+export const DEMO_PARTICIPANTS: Participant[] = generateParticipants(10)
+
+/** Backwards-compat aliases. The store now owns the *current* participant set. */
+export const PARTICIPANTS = DEMO_PARTICIPANTS
+export const PARTICIPANT_BY_ID = new Map(DEMO_PARTICIPANTS.map((p) => [p.id, p]))
+export const STORY_IDS: readonly string[] = DEMO_PARTICIPANTS.filter(
 	(p) => p.role === "story",
 ).map((p) => p.id)
-export const OBSERVER_IDS: readonly string[] = PARTICIPANTS.filter(
+export const OBSERVER_IDS: readonly string[] = DEMO_PARTICIPANTS.filter(
 	(p) => p.role === "observer",
 ).map((p) => p.id)
-export const DRIVER_IDS: readonly string[] = PARTICIPANTS.filter(
+export const DRIVER_IDS: readonly string[] = DEMO_PARTICIPANTS.filter(
 	(p) => p.role === "driver",
 ).map((p) => p.id)
 

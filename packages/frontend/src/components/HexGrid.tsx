@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef } from "react"
-import { PARTICIPANTS } from "../lib/participants"
-import { VIEWBOX, layoutFor } from "../lib/hexLayout"
+import { layoutFor } from "../lib/hexLayout"
 import { BUCKET_COLOR } from "../lib/eventTypes"
 import { useReplayClock } from "../lib/replayClock"
 import { HexParticipant } from "./HexParticipant"
@@ -19,14 +18,16 @@ export function HexGrid() {
 	const selectAgent = useReplayClock((s) => s.selectAgent)
 	const zoomIn = useReplayClock((s) => s.zoomIn)
 	const zoomOut = useReplayClock((s) => s.zoomOut)
+	const participants = useReplayClock((s) => s.participants)
+	const viewBox = useReplayClock((s) => s.viewBox)
 
 	const wrapperRef = useRef<HTMLDivElement>(null)
 
 	const positions = useMemo(() => {
 		const map = new Map<string, PixelCoord>()
-		for (const p of PARTICIPANTS) map.set(p.id, layoutFor(p.ring, p.ringIndex))
+		for (const p of participants) map.set(p.id, layoutFor(p.ring, p.ringIndex))
 		return map
-	}, [])
+	}, [participants])
 
 	useEffect(() => {
 		const el = wrapperRef.current
@@ -61,7 +62,7 @@ export function HexGrid() {
 			onClick={() => selectAgent(null)}
 		>
 			<svg
-				viewBox={VIEWBOX}
+				viewBox={viewBox}
 				className="w-full h-full"
 				preserveAspectRatio="xMidYMid meet"
 				role="img"
@@ -85,7 +86,7 @@ export function HexGrid() {
 				)}
 
 				<g>
-					{PARTICIPANTS.map((participant) => {
+					{participants.map((participant) => {
 						const pos = positions.get(participant.id)!
 						const lifeState = agentState[participant.id] ?? "hidden"
 
