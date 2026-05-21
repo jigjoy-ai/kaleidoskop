@@ -1,18 +1,20 @@
 import { useEffect, useRef } from "react"
+import { useParams } from "react-router-dom"
+import { backendWsForRun } from "../lib/backendUrls"
 import { useReplayClock } from "../lib/replayClock"
 import { connectToBackend, type WsClientHandle } from "../lib/wsClient"
 
-const DEFAULT_BACKEND_URL =
-	(import.meta.env.VITE_REPLAY_BACKEND_URL as string | undefined) ??
-	"ws://localhost:8787/api/runs/smoke-test/stream"
-
 /**
  * Header pill that toggles between the local scripted demo and a live
- * backend connection. The backend currently always replays a hardcoded
- * sample audit log (`~/.baro/runs/baro-1778482053.jsonl`); the run id
- * in the URL is decorative until the upload pipeline lands.
+ * backend connection. The target run id comes from the URL path
+ * (`/r/:id`); on `/` we default to the magic `smoke-test` id which the
+ * backend resolves to its hardcoded sample log.
  */
 export function SourceModeToggle() {
+	const params = useParams<{ id?: string }>()
+	const runId = params.id ?? "smoke-test"
+	const wsUrl = backendWsForRun(runId)
+
 	const sourceMode = useReplayClock((s) => s.sourceMode)
 	const sourceError = useReplayClock((s) => s.sourceError)
 	const setSourceMode = useReplayClock((s) => s.setSourceMode)
@@ -30,9 +32,22 @@ export function SourceModeToggle() {
 		}
 	}, [sourceMode])
 
+	// If the URL run id changes while we're connected (user navigated to
+	// a different /r/:id without manually disconnecting), drop the old
+	// socket so a fresh click hits the new id.
+	useEffect(() => {
+		if (handleRef.current) {
+			handleRef.current.close()
+			handleRef.current = null
+			resetRun()
+			setSourceMode("demo")
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [runId])
+
 	const connect = () => {
 		if (handleRef.current) return
-		handleRef.current = connectToBackend(DEFAULT_BACKEND_URL)
+		handleRef.current = connectToBackend(wsUrl)
 	}
 
 	const disconnect = () => {
@@ -49,7 +64,7 @@ export function SourceModeToggle() {
 				type="button"
 				onClick={disconnect}
 				className="inline-flex items-center gap-2 rounded-md border border-[var(--color-accent-dim)] bg-[var(--color-accent)]/15 px-2.5 py-1 font-mono text-[11px] text-[var(--color-fg)] hover:bg-[var(--color-accent)]/25 transition-colors"
-				title="Disconnect, return to scripted demo"
+				title={`Disconnect (was streaming ${runId})`}
 			>
 				<span
 					className="inline-block size-2 rounded-full bg-[var(--color-accent)] animate-pulse"
@@ -69,7 +84,7 @@ export function SourceModeToggle() {
 			title={
 				sourceError
 					? `Last error: ${sourceError}. Click to retry.`
-					: "Connect to local backend (replay sample audit log)"
+					: `Connect to backend (replay ${runId})`
 			}
 		>
 			{sourceError ? "reconnect" : "connect"}
@@ -77,7 +92,7 @@ export function SourceModeToggle() {
 				className="text-[var(--color-fg-muted)]/70"
 				aria-hidden="true"
 			>
-				ws://
+				{runId === "smoke-test" ? "demo" : runId.slice(0, 10)}
 			</span>
 		</button>
 	)
