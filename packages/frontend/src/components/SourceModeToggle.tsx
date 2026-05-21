@@ -9,10 +9,19 @@ import { connectToBackend, type WsClientHandle } from "../lib/wsClient"
  * backend connection. The target run id comes from the URL path
  * (`/r/:id`); on `/` we default to the magic `smoke-test` id which the
  * backend resolves to its hardcoded sample log.
+ *
+ * On smoke-test the pill is non-dismissable — it auto-connects on
+ * mount and stays live for the duration of the page visit. Letting
+ * users disconnect from the featured demo would race with the auto-
+ * connect effect (disconnect flips sourceMode → "demo" → auto-connect
+ * fires → another socket; rapid clicks stack sockets and freeze the
+ * UI). On uploaded runs (`/r/r_<id>`) the pill remains dismissable
+ * because the user opted into that connect themselves.
  */
 export function SourceModeToggle() {
 	const params = useParams<{ id?: string }>()
 	const runId = params.id ?? "smoke-test"
+	const isFeatured = runId === "smoke-test"
 	const wsUrl = backendWsForRun(runId)
 
 	const sourceMode = useReplayClock((s) => s.sourceMode)
@@ -20,6 +29,13 @@ export function SourceModeToggle() {
 	const setSourceMode = useReplayClock((s) => s.setSourceMode)
 	const resetRun = useReplayClock((s) => s.resetRun)
 	const handleRef = useRef<WsClientHandle | null>(null)
+	// Re-entrancy guard. The auto-connect effect depends on
+	// [runId, sourceMode], and connectToBackend synchronously flips
+	// sourceMode → "connecting", which re-fires the effect before
+	// handleRef.current has been assigned in this render cycle. Without
+	// this flag, two effect runs back-to-back can each pass the
+	// "handleRef.current is null" check and open two sockets.
+	const connectingRef = useRef(false)
 
 	// When the run finishes naturally (backend sends `done`) or the
 	// socket closes / errors out, the wsClient flips sourceMode back to
@@ -29,6 +45,7 @@ export function SourceModeToggle() {
 	useEffect(() => {
 		if (sourceMode === "demo" || sourceMode === "error") {
 			handleRef.current = null
+			connectingRef.current = false
 		}
 	}, [sourceMode])
 
@@ -39,6 +56,7 @@ export function SourceModeToggle() {
 		if (handleRef.current) {
 			handleRef.current.close()
 			handleRef.current = null
+			connectingRef.current = false
 			resetRun()
 			setSourceMode("demo")
 		}
@@ -47,7 +65,21 @@ export function SourceModeToggle() {
 
 	const connect = () => {
 		if (handleRef.current) return
-		handleRef.current = connectToBackend(wsUrl)
+		if (connectingRef.current) return
+		if (sourceMode === "connecting" || sourceMode === "live") return
+		connectingRef.current = true
+		try {
+			handleRef.current = connectToBackend(wsUrl)
+		} finally {
+			// Release the guard on the next microtask — wsClient has
+			// already synchronously set sourceMode to "connecting" by
+			// this point, so the auto-connect effect's
+			// `sourceMode === "demo"` check will fail on the rerun and
+			// the guard isn't strictly needed any more.
+			queueMicrotask(() => {
+				connectingRef.current = false
+			})
+		}
 	}
 
 	// Auto-connect the moment we land on the featured demo run. On `/`
@@ -58,9 +90,10 @@ export function SourceModeToggle() {
 	// click — uploaders read the meta banner first, decide when to play.
 	useEffect(() => {
 		if (
-			runId === "smoke-test" &&
+			isFeatured &&
 			sourceMode === "demo" &&
-			!handleRef.current
+			!handleRef.current &&
+			!connectingRef.current
 		) {
 			connect()
 		}
@@ -70,12 +103,30 @@ export function SourceModeToggle() {
 	const disconnect = () => {
 		handleRef.current?.close()
 		handleRef.current = null
+		connectingRef.current = false
 		resetRun()
 		setSourceMode("demo")
 	}
 
 	if (sourceMode === "live" || sourceMode === "connecting") {
 		const label = sourceMode === "live" ? "live" : "connecting…"
+		if (isFeatured) {
+			// Featured-demo: non-clickable status indicator. Same shape
+			// as the dismissable pill so the header layout doesn't shift.
+			return (
+				<span
+					className="inline-flex items-center gap-2 rounded-md border border-[var(--color-accent-dim)] bg-[var(--color-accent)]/15 px-2.5 py-1 font-mono text-[11px] text-[var(--color-fg)] select-none"
+					title="Featured demo · streaming live"
+					aria-live="polite"
+				>
+					<span
+						className="inline-block size-2 rounded-full bg-[var(--color-accent)] animate-pulse"
+						aria-hidden="true"
+					/>
+					{label}
+				</span>
+			)
+		}
 		return (
 			<button
 				type="button"
@@ -109,7 +160,7 @@ export function SourceModeToggle() {
 				className="text-[var(--color-fg-muted)]/70"
 				aria-hidden="true"
 			>
-				{runId === "smoke-test" ? "demo" : runId.slice(0, 10)}
+				{isFeatured ? "demo" : runId.slice(0, 10)}
 			</span>
 		</button>
 	)
