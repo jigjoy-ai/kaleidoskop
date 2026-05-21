@@ -50,6 +50,23 @@ export function SourceModeToggle() {
 		handleRef.current = connectToBackend(wsUrl)
 	}
 
+	// Auto-connect the moment we land on the featured demo run. On `/`
+	// the router redirects to `/r/smoke-test`; the visitor never had a
+	// chance to click "connect" themselves, so triggering it here makes
+	// the landing page show real backend output instead of an idle
+	// honeycomb. Uploaded runs (`/r/r_<id>`) still require an explicit
+	// click — uploaders read the meta banner first, decide when to play.
+	useEffect(() => {
+		if (
+			runId === "smoke-test" &&
+			sourceMode === "demo" &&
+			!handleRef.current
+		) {
+			connect()
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [runId, sourceMode])
+
 	const disconnect = () => {
 		handleRef.current?.close()
 		handleRef.current = null
