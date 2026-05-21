@@ -13,6 +13,7 @@
     "@kaleidoskop/shared": "*",
     "d3": "^7.9.0",
     "framer-motion": "^11.18.2",
+    "posthog-js": "^1.374.4",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-router-dom": "^7.15.1",
