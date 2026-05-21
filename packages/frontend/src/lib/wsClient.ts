@@ -47,6 +47,63 @@ const BACKEND_TO_LAYOUT_ID: Record<string, string> = {
 	finalizer: "finalizer",
 }
 
+/** Live lifecycle bookkeeping for the active WS session. */
+class LiveLifecycle {
+	private states = new Map<string, AgentLifeState>()
+
+	seedHidden(layoutId: string): void {
+		if (!this.states.has(layoutId)) {
+			this.states.set(layoutId, "hidden")
+		}
+	}
+
+	/**
+	 * Update the lifecycle for an event's source. Returns true if the
+	 * caller should flush the state map to the store, false otherwise
+	 * (e.g. no transition happened — avoid noisy zustand updates).
+	 */
+	apply(event: ReplayEvent, layoutSourceId: string): boolean {
+		const current = this.states.get(layoutSourceId) ?? "hidden"
+		const next = this.resolveNext(event, current)
+		if (next === current) return false
+		this.states.set(layoutSourceId, next)
+		return true
+	}
+
+	snapshot(): Record<string, AgentLifeState> {
+		return Object.fromEntries(this.states.entries())
+	}
+
+	private resolveNext(
+		event: ReplayEvent,
+		current: AgentLifeState,
+	): AgentLifeState {
+		// Story-level terminal states: agent_state with phase done/failed
+		// /aborted, OR a story_result event (covers cases where Claude
+		// emitted result without a clean phase transition).
+		if (event.domain === "agent_state") {
+			const phase = (event.data?.phase ?? "") as string
+			if (phase === "done" || phase === "failed" || phase === "aborted") {
+				return "completed"
+			}
+			return current === "completed" ? "completed" : "active"
+		}
+		if (event.domain === "story_result") {
+			return "completed"
+		}
+		if (event.domain === "run_completed") {
+			// run completing doesn't transition the Conductor by itself —
+			// the audit log usually has a final conductor_state phase=done
+			// right after. Don't force terminal here.
+			return current === "hidden" ? "active" : current
+		}
+		// Any other event from a hidden source → mark active. Don't
+		// downgrade an already-completed participant.
+		if (current === "completed") return "completed"
+		return "active"
+	}
+}
+
 export interface WsClientHandle {
 	close: () => void
 }
@@ -57,6 +114,7 @@ export function connectToBackend(url: string): WsClientHandle {
 
 	const socket = new WebSocket(url)
 	const allocator = new StoryIdAllocator()
+	const lifecycle = new LiveLifecycle()
 
 	const remap = (backendId: string): string => {
 		if (backendId in BACKEND_TO_LAYOUT_ID) {
@@ -69,12 +127,8 @@ export function connectToBackend(url: string): WsClientHandle {
 	}
 
 	socket.addEventListener("open", () => {
-		// reset run state so the live data lands in a clean store —
-		// scripted demo lifecycle/firing/ripples are wiped.
 		store.getState().resetRun()
 		store.getState().setSourceMode("connecting")
-		// Expose a command sender so PlaybackControls can round-trip
-		// play/pause/speed to the backend ReplaySession.
 		store.getState().setBackendCommandSender((cmd) => {
 			if (socket.readyState === socket.OPEN) {
 				socket.send(JSON.stringify(cmd))
@@ -105,18 +159,16 @@ export function connectToBackend(url: string): WsClientHandle {
 
 		switch (msg.kind) {
 			case "hello": {
-				handleHello(msg.participants, remap)
+				handleHello(msg.participants, remap, lifecycle)
 				store.getState().setSourceMode("live")
 				return
 			}
 			case "event": {
-				handleEvent(msg.event, remap)
+				handleEvent(msg.event, remap, lifecycle)
 				return
 			}
 			case "done": {
 				store.getState().setSourceMode("demo")
-				// Close the socket so the backend can tear down its
-				// ReplaySession instead of leaving an idle WS open.
 				try {
 					socket.close()
 				} catch {
@@ -145,23 +197,26 @@ export function connectToBackend(url: string): WsClientHandle {
 function handleHello(
 	participants: readonly ParticipantInfo[],
 	remap: (id: string) => string,
+	lifecycle: LiveLifecycle,
 ): void {
-	// Mark every discovered participant that has a layout slot as active
-	// from t=0. Lifecycle (spawn → active → completed) isn't reconstructed
-	// from the audit log yet — we just want the right hexes visible.
-	const states: Record<string, AgentLifeState> = {}
+	// Seed every discovered participant in `hidden` state. They transition
+	// to `active` on their first event and to `completed` when an
+	// `agent_state phase: done/failed/aborted` or `story_result` event
+	// arrives. This lets the live mode reproduce the same spawn/complete
+	// drama the scripted demo has — driven by real audit-log events.
 	for (const p of participants) {
 		const layoutId = remap(p.id)
 		if (PARTICIPANT_BY_ID.has(layoutId)) {
-			states[layoutId] = "active"
+			lifecycle.seedHidden(layoutId)
 		}
 	}
-	useReplayClock.getState().setAgentStates(states)
+	useReplayClock.getState().setAgentStates(lifecycle.snapshot())
 }
 
 function handleEvent(
 	event: ReplayEvent,
 	remap: (id: string) => string,
+	lifecycle: LiveLifecycle,
 ): void {
 	const remappedSource = remap(event.sourceId)
 	const remappedSubs = event.subscriberIds.map(remap)
@@ -172,9 +227,15 @@ function handleEvent(
 	// for.
 	if (!PARTICIPANT_BY_ID.has(remappedSource)) return
 
-	useReplayClock.getState().emit({
+	const remappedEvent: ReplayEvent = {
 		...event,
 		sourceId: remappedSource,
 		subscriberIds: remappedSubs.filter((id) => PARTICIPANT_BY_ID.has(id)),
-	})
+	}
+
+	if (lifecycle.apply(remappedEvent, remappedSource)) {
+		useReplayClock.getState().setAgentStates(lifecycle.snapshot())
+	}
+
+	useReplayClock.getState().emit(remappedEvent)
 }
