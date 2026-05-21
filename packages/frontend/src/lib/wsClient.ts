@@ -7,7 +7,7 @@ import type {
 
 import { useReplayClock } from "./replayClock"
 import type { AgentLifeState } from "./runScript"
-import { PARTICIPANT_BY_ID } from "./participants"
+import { generateParticipants } from "./participants"
 
 /**
  * Map a backend-discovered participant id onto a slot in the existing
@@ -155,6 +155,7 @@ export function connectToBackend(url: string): WsClientHandle {
 	socket.addEventListener("close", () => {
 		store.getState().setBackendCommandSender(null)
 		store.getState().resetRunDuration()
+		store.getState().resetParticipants()
 		const current = store.getState().sourceMode
 		if (current === "live" || current === "connecting") {
 			store.getState().setSourceMode("demo")
@@ -213,19 +214,32 @@ export function connectToBackend(url: string): WsClientHandle {
 	}
 }
 
+/** Read the current layout roster from the store. */
+function currentRoster(): Map<string, unknown> {
+	return useReplayClock.getState().participantById
+}
+
 function handleHello(
 	participants: readonly ParticipantInfo[],
 	remap: (id: string) => string,
 	lifecycle: LiveLifecycle,
 ): void {
+	// Count story participants so we can size the honeycomb layout
+	// before seeding lifecycle state. Backend ids for story sources
+	// start with `story-`; non-story participants (operator, conductor,
+	// observers, drivers) come through with their canonical names.
+	const storyCount = participants.filter((p) => p.role === "story").length
+	useReplayClock.getState().setParticipants(generateParticipants(storyCount))
+
 	// Seed every discovered participant in `hidden` state. They transition
 	// to `active` on their first event and to `completed` when an
 	// `agent_state phase: done/failed/aborted` or `story_result` event
 	// arrives. This lets the live mode reproduce the same spawn/complete
 	// drama the scripted demo has — driven by real audit-log events.
+	const roster = currentRoster()
 	for (const p of participants) {
 		const layoutId = remap(p.id)
-		if (PARTICIPANT_BY_ID.has(layoutId)) {
+		if (roster.has(layoutId)) {
 			lifecycle.seedHidden(layoutId)
 		}
 	}
@@ -240,16 +254,17 @@ function handleEvent(
 	const remappedSource = remap(event.sourceId)
 	const remappedSubs = event.subscriberIds.map(remap)
 
+	const roster = currentRoster()
 	// Drop events whose source isn't in the current honeycomb roster
 	// (plugin metadata leakage, unknown participants). Frontend would
 	// otherwise crash trying to render a hex it doesn't have a position
 	// for.
-	if (!PARTICIPANT_BY_ID.has(remappedSource)) return
+	if (!roster.has(remappedSource)) return
 
 	const remappedEvent: ReplayEvent = {
 		...event,
 		sourceId: remappedSource,
-		subscriberIds: remappedSubs.filter((id) => PARTICIPANT_BY_ID.has(id)),
+		subscriberIds: remappedSubs.filter((id) => roster.has(id)),
 	}
 
 	if (lifecycle.apply(remappedEvent, remappedSource)) {
@@ -272,13 +287,14 @@ function handleSnapshot(
 	remap: (id: string) => string,
 	lifecycle: LiveLifecycle,
 ): void {
+	const roster = currentRoster()
 	// Remap backend ids onto layout ids and drop anything we can't
 	// render. Snapshot semantics: replace state wholesale at the
 	// seek-target moment.
 	const remappedState: Record<string, AgentLifeState> = {}
 	for (const [backendId, state] of Object.entries(snap.agentState)) {
 		const layoutId = remap(backendId)
-		if (PARTICIPANT_BY_ID.has(layoutId)) {
+		if (roster.has(layoutId)) {
 			remappedState[layoutId] = state
 		}
 	}
@@ -287,13 +303,13 @@ function handleSnapshot(
 	const remappedRecent: ReplayEvent[] = []
 	for (const e of snap.recent) {
 		const source = remap(e.sourceId)
-		if (!PARTICIPANT_BY_ID.has(source)) continue
+		if (!roster.has(source)) continue
 		remappedRecent.push({
 			...e,
 			sourceId: source,
 			subscriberIds: e.subscriberIds
 				.map(remap)
-				.filter((id) => PARTICIPANT_BY_ID.has(id)),
+				.filter((id) => roster.has(id)),
 		})
 	}
 

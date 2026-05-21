@@ -11,8 +11,8 @@ import {
 	lookupScript,
 } from "./runScript"
 import { nextEvent, spawnEvent } from "./scriptedStream"
-import { PARTICIPANTS } from "./participants"
 import { layoutFor } from "./hexLayout"
+import type { PixelCoord } from "./types"
 
 const MIN_EMIT_MS = 90
 const MAX_EMIT_MS = 480
@@ -22,19 +22,38 @@ function computeEmitInterval(activeCount: number): number {
 	return Math.max(MIN_EMIT_MS, MAX_EMIT_MS / Math.max(1, activeCount))
 }
 
-// Pre-cache the canonical pixel position of every participant once. Used to
-// pace ripple → subscriber timing (delay = distance / speed).
-const POSITIONS = new Map(
-	PARTICIPANTS.map((p) => [p.id, layoutFor(p.ring, p.ringIndex)] as const),
-)
+// Position + distance caches keyed by participant id. Lazily filled from
+// the current store's participant set — live runs with > 10 stories use
+// ring 3 / 4 slots that the static DEMO_PARTICIPANTS roster wouldn't
+// cover. Cleared by `resetPositionCache()` whenever the store's
+// participants object identity changes.
+const POSITIONS = new Map<string, PixelCoord>()
 const DISTANCE_CACHE = new Map<string, number>()
+let cachedParticipantsRef: object | null = null
+
+function positionOf(id: string): PixelCoord | undefined {
+	const participants = useReplayClock.getState().participants
+	if (participants !== cachedParticipantsRef) {
+		POSITIONS.clear()
+		DISTANCE_CACHE.clear()
+		cachedParticipantsRef = participants
+	}
+	const cached = POSITIONS.get(id)
+	if (cached) return cached
+	const p = useReplayClock.getState().participantById.get(id)
+	if (!p) return undefined
+	const pos = layoutFor(p.ring, p.ringIndex)
+	POSITIONS.set(id, pos)
+	return pos
+}
+
 function distance(a: string, b: string): number {
 	if (a === b) return 0
 	const key = a < b ? `${a}|${b}` : `${b}|${a}`
 	let d = DISTANCE_CACHE.get(key)
 	if (d !== undefined) return d
-	const pa = POSITIONS.get(a)
-	const pb = POSITIONS.get(b)
+	const pa = positionOf(a)
+	const pb = positionOf(b)
 	if (!pa || !pb) return 0
 	d = Math.hypot(pa.x - pb.x, pa.y - pb.y)
 	DISTANCE_CACHE.set(key, d)

@@ -1,5 +1,4 @@
 import { BUCKET_COLOR, BUCKET_LABEL, DOMAIN_LABEL } from "../lib/eventTypes"
-import { PARTICIPANT_BY_ID } from "../lib/participants"
 import { useReplayClock } from "../lib/replayClock"
 
 export function EventInspector() {
@@ -7,6 +6,7 @@ export function EventInspector() {
 	const playing = useReplayClock((s) => s.playing)
 	const pausedFocus = useReplayClock((s) => s.pausedFocus)
 	const setPausedFocus = useReplayClock((s) => s.setPausedFocus)
+	const participantById = useReplayClock((s) => s.participantById)
 
 	const focusedId = pausedFocus?.id ?? null
 	const canFocus = !playing
@@ -30,7 +30,7 @@ export function EventInspector() {
 				{recent.map((e) => {
 					const color = BUCKET_COLOR[e.bucket]
 					const source =
-						PARTICIPANT_BY_ID.get(e.sourceId)?.label ?? e.sourceId
+						participantById.get(e.sourceId)?.label ?? e.sourceId
 					const isFocused = focusedId === e.id
 					const subCount = e.subscriberIds.length
 

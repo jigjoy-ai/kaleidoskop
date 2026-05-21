@@ -16,8 +16,11 @@ export type {
 import type { ParticipantInfo } from "@mozaik-replay/shared"
 
 // Frontend-only: layout adds ring/ringIndex to the wire ParticipantInfo.
+// Ring is open-ended (0…N) so we can grow the honeycomb beyond the
+// scripted demo's 3-ring footprint when a real audit log has more stories
+// than the default ring-2 budget (10 + 2 drivers).
 export interface Participant extends ParticipantInfo {
-	ring: 0 | 1 | 2
+	ring: number
 	ringIndex: number
 }
 

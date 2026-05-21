@@ -51,30 +51,34 @@ function axialToPixel(coord: Axial, size = HEX_SIZE): PixelCoord {
 	}
 }
 
-const RING_COORDS: readonly (readonly Axial[])[] = [
-	ringCoords(0),
-	ringCoords(1),
-	ringCoords(2),
-]
+// Cache ring coords on demand. We support arbitrary ring depth; the demo
+// only needs 0..2, live runs with 33 stories reach into ring 4.
+const RING_CACHE = new Map<number, readonly Axial[]>()
 
-// Each participant carries a ring (0|1|2) and ringIndex; we look up the
-// corresponding axial coord, convert to pixel, done. This is the canonical
-// layout function — there's intentionally no force-simulated fallback. The
-// 19-cell concentric honeycomb shape is the visual contract.
-export function layoutFor(
-	ring: 0 | 1 | 2,
-	ringIndex: number,
-): PixelCoord {
-	const r = RING_COORDS[ring]
-	const coord = r[ringIndex]
+function getRingCoords(radius: number): readonly Axial[] {
+	const cached = RING_CACHE.get(radius)
+	if (cached) return cached
+	const coords = ringCoords(radius)
+	RING_CACHE.set(radius, coords)
+	return coords
+}
+
+/**
+ * Pixel position for a hex at (ring, ringIndex). Supports any ring depth
+ * — the underlying coord generator is open-ended. Out-of-bounds
+ * ringIndex falls back to {0,0} (centre) rather than throwing because
+ * the layout invariant is enforced at participant-list construction
+ * time; if a participant slipped through with a bad index, putting it at
+ * centre is less violent than crashing the SVG render.
+ */
+export function layoutFor(ring: number, ringIndex: number): PixelCoord {
+	const coords = getRingCoords(ring)
+	const coord = coords[ringIndex] ?? coords[0] ?? { q: 0, r: 0 }
 	return axialToPixel(coord)
 }
 
-export function layoutForParticipant(p: Participant & {
-	ring?: 0 | 1 | 2
-	ringIndex?: number
-}): PixelCoord {
-	return layoutFor(p.ring ?? 0, p.ringIndex ?? 0)
+export function layoutForParticipant(p: Participant): PixelCoord {
+	return layoutFor(p.ring, p.ringIndex)
 }
 
 // Pointy-top hex vertices around (cx, cy). The first vertex sits directly
@@ -91,7 +95,31 @@ export function hexVertices(cx: number, cy: number, size = HEX_SIZE): string {
 	return points.join(" ")
 }
 
-const MAX_EXTENT = 2 * SQRT3 * HEX_SIZE + HEX_SIZE
 const PADDING = HEX_SIZE * 0.45
-export const VIEWBOX_SIZE = Math.ceil((MAX_EXTENT + PADDING) * 2)
-export const VIEWBOX = `${-VIEWBOX_SIZE / 2} ${-VIEWBOX_SIZE / 2} ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}`
+
+/**
+ * Compute the SVG viewBox dimension for a honeycomb with this many rings.
+ * Used by the dynamic layout in the store so demo (ring 2 max) renders
+ * larger hexes than a 33-story run (ring 4 max).
+ */
+export function viewBoxSizeFor(maxRing: number): number {
+	// Outer extent in pixels: ring `r` has hex centres at distance
+	// `r * HEX_SIZE * sqrt(3)` for the outermost slot in flat directions
+	// and `r * HEX_SIZE * 1.5` vertically. Take the bigger of the two
+	// and add a hex radius worth of margin so the outermost polygons
+	// don't kiss the SVG edge.
+	const extent =
+		Math.max(maxRing * HEX_SIZE * SQRT3, maxRing * HEX_SIZE * 1.5) +
+		HEX_SIZE
+	return Math.ceil((extent + PADDING) * 2)
+}
+
+/** Pre-baked viewBox string for the scripted demo (3 rings: 0..2). */
+const DEMO_VIEWBOX_SIZE = viewBoxSizeFor(2)
+export const VIEWBOX_SIZE = DEMO_VIEWBOX_SIZE
+export const VIEWBOX = `${-DEMO_VIEWBOX_SIZE / 2} ${-DEMO_VIEWBOX_SIZE / 2} ${DEMO_VIEWBOX_SIZE} ${DEMO_VIEWBOX_SIZE}`
+
+export function viewBoxFor(maxRing: number): string {
+	const size = viewBoxSizeFor(maxRing)
+	return `${-size / 2} ${-size / 2} ${size} ${size}`
+}
