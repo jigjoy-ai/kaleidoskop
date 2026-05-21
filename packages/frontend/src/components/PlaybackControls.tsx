@@ -1,3 +1,4 @@
+import type React from "react"
 import { useReplayClock } from "../lib/replayClock"
 import { PARTICIPANT_BY_ID } from "../lib/participants"
 
@@ -19,6 +20,7 @@ export function PlaybackControls() {
 	const selectedAgentId = useReplayClock((s) => s.selectedAgentId)
 	const togglePlaying = useReplayClock((s) => s.togglePlaying)
 	const setSpeed = useReplayClock((s) => s.setSpeed)
+	const setSimTime = useReplayClock((s) => s.setSimTime)
 	const resetRun = useReplayClock((s) => s.resetRun)
 	const selectAgent = useReplayClock((s) => s.selectAgent)
 	const backendCommandSender = useReplayClock((s) => s.backendCommandSender)
@@ -50,12 +52,47 @@ export function PlaybackControls() {
 		}
 	}
 
+	// Click anywhere on the bar to seek. Optimistically advances the
+	// local clock (so the bar jumps immediately) and rounds-trips a seek
+	// command to the backend when one is connected. Demo mode: only
+	// updates simTimeMs — the scripted-run loop in useReplayDriver picks
+	// it up next frame.
+	const handleScrub = (e: React.MouseEvent<HTMLDivElement>) => {
+		if (runDurationMs <= 0) return
+		const rect = e.currentTarget.getBoundingClientRect()
+		const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+		const toMs = Math.round(ratio * runDurationMs)
+		setSimTime(toMs)
+		if (backendCommandSender) {
+			backendCommandSender({ kind: "seek", toMs })
+		}
+	}
+
 	return (
 		<div className="border-t border-[var(--color-border)] bg-[var(--color-bg-elev)]">
-			<div className="h-[3px] bg-[#1a1a23]">
+			<div
+				role="slider"
+				aria-label="Replay progress"
+				aria-valuemin={0}
+				aria-valuemax={runDurationMs}
+				aria-valuenow={simTimeMs}
+				tabIndex={0}
+				onClick={handleScrub}
+				className="group relative h-2 bg-[#1f1f29] cursor-pointer hover:h-3 transition-[height]"
+				title="Click to seek"
+			>
 				<div
-					className="h-full bg-[var(--color-accent)] transition-all"
-					style={{ width: `${progress}%`, transitionDuration: "120ms" }}
+					className="h-full bg-[var(--color-accent)]"
+					style={{
+						width: `${progress}%`,
+						transition: "width 120ms ease-out",
+						boxShadow: "0 0 8px rgba(185,123,255,0.6)",
+					}}
+				/>
+				{/* Hover scrub marker (visible only when hovering bar). */}
+				<div
+					className="absolute top-0 bottom-0 w-px bg-[var(--color-accent)]/30 opacity-0 group-hover:opacity-100 pointer-events-none"
+					style={{ left: `${progress}%`, transition: "opacity 120ms" }}
 				/>
 			</div>
 			<div className="flex items-center gap-3 px-4 py-2.5 text-sm">
