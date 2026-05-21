@@ -1,4 +1,5 @@
 import { randomBytes } from "crypto"
+import { existsSync } from "fs"
 import { readFile } from "fs/promises"
 import { homedir } from "os"
 import { join, resolve } from "path"
@@ -41,12 +42,28 @@ const PUBLIC_ORIGIN = process.env["KALEIDOSKOP_PUBLIC_ORIGIN"] ?? ""
 /**
  * Hardcoded sample run accessible via the magic id `smoke-test`. Kept
  * so dev work and the deployed demo page can always fall back to a
- * known-good replay without uploading anything. Set KALEIDOSKOP_SAMPLE
- * to point at a different local JSONL.
+ * known-good replay without uploading anything.
+ *
+ * Resolution order:
+ *   1. KALEIDOSKOP_SAMPLE env var (explicit override).
+ *   2. <cwd>/packages/backend/samples/demo.jsonl (shipped with the
+ *      repo; works for local dev from monorepo root and for the
+ *      deployed EC2 where systemd's WorkingDirectory is
+ *      /opt/kaleidoskop).
+ *   3. ~/.baro/runs/baro-1778482053.jsonl legacy fallback so my own
+ *      laptop still resolves without a config tweak.
  */
 const SAMPLE_LOG_PATH =
 	process.env["KALEIDOSKOP_SAMPLE"] ??
-	join(homedir(), ".baro", "runs", "baro-1778482053.jsonl")
+	(() => {
+		const repoSample = join(
+			process.cwd(),
+			"packages/backend/samples/demo.jsonl",
+		)
+		return existsSync(repoSample)
+			? repoSample
+			: join(homedir(), ".baro", "runs", "baro-1778482053.jsonl")
+	})()
 
 /** Max accepted upload size for POST /api/runs. 50 MB covers a ~33-story run with headroom. */
 const UPLOAD_BODY_LIMIT_BYTES = 50 * 1024 * 1024
