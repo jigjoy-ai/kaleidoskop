@@ -3,7 +3,7 @@ import type {
 	ReplayEvent,
 	ReplayStateSnapshot,
 	StreamMessage,
-} from "@mozaik-replay/shared"
+} from "@kaleidoskop/shared"
 
 import { useReplayClock } from "./replayClock"
 import type { AgentLifeState } from "./runScript"

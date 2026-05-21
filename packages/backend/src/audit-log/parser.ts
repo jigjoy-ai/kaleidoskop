@@ -3,7 +3,7 @@ import {
 	SUBSCRIBERS,
 	type ParticipantInfo,
 	type ReplayEvent,
-} from "@mozaik-replay/shared"
+} from "@kaleidoskop/shared"
 
 import { parseSource } from "./source-mapper.js"
 import { mapItem, summariseItem } from "./item-mapper.js"

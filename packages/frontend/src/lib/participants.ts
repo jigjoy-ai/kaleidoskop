@@ -1,7 +1,7 @@
 import type { DomainEvent, Participant } from "./types"
 // Re-export the shared, canonical subscriber matrix so scripted-demo
 // renderings stay 1:1 with whatever the backend live mode enriches.
-export { SUBSCRIBERS } from "@mozaik-replay/shared"
+export { SUBSCRIBERS } from "@kaleidoskop/shared"
 
 // Honeycomb layout, concentric rings:
 //   ring 0 — Conductor (centre, drives the DAG)

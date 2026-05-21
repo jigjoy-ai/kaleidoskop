@@ -50,10 +50,10 @@ function buildBlock({ runId, publicOrigin, meta }: OgRenderInput): string {
 
 	const title = meta
 		? `Replay ${runId} — ${meta.eventCount} events · ${meta.storyCount} stories · ${formatDuration(meta.durationMs)}`
-		: `Replay ${runId} — mozaik-replay`
+		: `Replay ${runId} — kaleidoskop`
 	const desc = meta
 		? `${meta.participantCount} participants, ${meta.eventCount} bus events, captured ${meta.createdAt.slice(0, 10)}. Replay every Mozaik fan-out in the agent honeycomb.`
-		: `mozaik-replay session ${runId}. Replay every Mozaik fan-out in the agent honeycomb.`
+		: `kaleidoskop session ${runId}. Replay every Mozaik fan-out in the agent honeycomb.`
 
 	const t = escapeHtml(title)
 	const d = escapeHtml(desc)

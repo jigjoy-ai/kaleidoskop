@@ -6,7 +6,7 @@ import type {
 	ReplayStateSnapshot,
 	StreamCommand,
 	StreamMessage,
-} from "@mozaik-replay/shared"
+} from "@kaleidoskop/shared"
 
 import { ReplayParticipant } from "./replay-participant.js"
 import { StreamObserver } from "./stream-observer.js"

@@ -19,7 +19,7 @@ import { uploadRun } from "../lib/uploadRun"
  * Also exposes an imperative `triggerFilePicker()` via window event for
  * the header "upload" button to invoke.
  */
-const DROP_TRIGGER_EVENT = "mozaik-replay:open-file-picker"
+const DROP_TRIGGER_EVENT = "kaleidoskop:open-file-picker"
 
 export function triggerUploadPicker(): void {
 	window.dispatchEvent(new CustomEvent(DROP_TRIGGER_EVENT))

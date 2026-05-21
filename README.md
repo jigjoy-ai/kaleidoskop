@@ -1,74 +1,103 @@
-# mozaik-replay
+# kaleidoskop
 
-Replay visualization for the [Mozaik](https://github.com/jigjoy-ai/mozaik) event bus. Drop in an audit log from any Mozaik run — including a [baro](https://github.com/jigjoy-ai/baro) PR build — and watch every participant, every tool call, every bus emit fire as a hexagonal neural network.
+Replay visualization for [Mozaik](https://github.com/jigjoy-ai/mozaik) event-bus runs. Drop in an audit log from any Mozaik orchestration — including a [baro](https://github.com/jigjoy-ai/baro) PR build — and watch every participant, every tool call, every bus emit fire as a hexagonal neural network.
 
-> Status: bootstrap. Phase 1 (hex grid + replay engine) in progress.
+> **Status:** MVP. Backend + frontend round-trip live. Variable layout up to 52 stories. Per-run shareable URLs with OG previews. AWS deploy pipeline drafted. **Domain:** `kaleidoskop.jigjoy.ai` (planned, not yet provisioned).
 
-## What this is
+## What it does
 
-Every Mozaik orchestration emits a structured audit log. Today those logs are read as JSONL or summarised in CLI output. `mozaik-replay` renders them as a live visualization:
+Every Mozaik orchestration emits a structured JSONL audit log. kaleidoskop is what makes that legible:
 
-- **Hexagons** are participants (Architect, Planner, Story Agents, Critic, Surgeon, Finalizer, …).
-- **Edges** are the bus — they flash when an event travels between participants.
-- **Colors** map to event type — tool calls, streaming tokens, web searches, file edits, completions, errors.
-- **Time** is a scrubber — replay the run at 1×, 5×, 20×, or jump frame-by-frame.
+- **Hexagons** are participants (Conductor, Operator, observers, story agents).
+- **Ripples** are bus events fanning out from emitter to subscribers.
+- **Colors** map to event domain — tool calls, model messages, story results, errors.
+- **Time** is a scrubbable progress bar — pause, seek, change speed.
+- **Lifecycle** is reconstructed from real audit-log events (spawn → active → completed), not a script.
 
-The visual language is a neural-network-firing animation: participants are nodes, the bus is the synapse, events are spikes.
+The visual language is a neural-network firing animation: participants are nodes, the bus is the synapse, events are spikes.
 
-## Why
+## Architecture
 
-The Mozaik event bus model is the hardest part of baro to explain in words. Diagrams help. A replay video would help more. A *live* interactive replay — where you can pause, scrub, hover a hexagon and see its full event history — is the strongest possible demonstration of what reactive agents on a shared bus actually look like in motion.
+Monorepo (npm workspaces), three packages:
+
+```
+packages/
+├── shared/      — Wire types + canonical subscriber matrix
+├── backend/     — Fastify server: parser, replay engine, WS, S3 storage, SSR
+└── frontend/    — Vite + React + Tailwind: hex grid, ripples, scrub bar
+```
+
+**Backend (`@kaleidoskop/backend`):** Fastify HTTP + WebSocket server. `POST /api/runs` accepts JSONL uploads, parses, persists to S3 (or local FS in dev). `GET /api/runs/:id/stream` opens a WebSocket replay session that runs the parsed events through a Mozaik `AgenticEnvironment` and streams typed `StreamMessage` envelopes to the client. Also injects per-run OG metadata for `/r/:id` so link previews show meaningful titles, and serves a dynamic SVG OG image at `/api/runs/:id/og.svg`.
+
+**Frontend (`@kaleidoskop/frontend`):** Vite + React + Tailwind v4 SPA. Honeycomb layout grows from 19 cells (demo) up to 61 cells (ring 0..4) depending on the run's story count. Subscriber fan-out, lifecycle transitions, and scrubbing all work end-to-end with the live backend.
 
 ## Scope (three phases)
 
-| Phase | Goal | Status |
-|---|---|---|
-| **1 · Frontend MVP** | Hex grid, replay engine, playback controls, JSONL drop zone. Reads audit logs that already exist. | In progress |
-| **2 · Mozaik runtime** | Live mode — connect to a running Mozaik orchestration via WebSocket and visualize events as they happen. | Pending |
-| **3 · Sharing + polish** | Permalink-able replays, embed widget, gallery of sample runs (incl. baro's own builds). | Pending |
+| Phase                          | Goal                                                                              | Status      |
+| ------------------------------ | --------------------------------------------------------------------------------- | ----------- |
+| **1 · Frontend MVP**           | Hex grid, replay engine, scrubbable controls, JSONL drop zone                     | **Done**    |
+| **2 · Mozaik runtime + share** | Backend replay engine, S3 persistence, per-run URLs, OG link previews             | **Done**    |
+| **3 · Deploy + polish**        | `kaleidoskop.jigjoy.ai` on AWS, dynamic OG thumbnails, run gallery, embed widget  | In progress |
 
 ## Tech stack
 
-- **Vite + React + TypeScript** — build/runtime
-- **Tailwind CSS v4** — styling (via `@tailwindcss/vite`)
-- **D3.js** — hex grid layout math (`d3-hexbin`, `d3-force`)
+- **Vite + React + TypeScript** — frontend build/runtime
+- **Tailwind CSS v4** — styling (`@tailwindcss/vite`)
+- **D3.js** — hex grid layout math
 - **framer-motion** — declarative edge flashes and node pulses
-- **zustand** — replay clock and selection state
+- **zustand** — replay clock + selection state, dynamic participant roster
+- **Fastify v5** — backend HTTP + WebSocket
+- **@mozaik-ai/core 3.10** — replay engine (`AgenticEnvironment`, observer subscribe pattern)
+- **AWS SDK v3 (S3)** — audit-log persistence
 
 ## Local development
 
 ```bash
 npm install
-npm run dev
+npm run dev          # frontend (Vite on :5173)
+npm run dev:backend  # backend (Fastify on :8787, fs storage)
 ```
 
-Build:
+To exercise the full SSR + OG path locally:
 
 ```bash
-npm run build
-npm run preview
+npm run build:frontend
+KALEIDOSKOP_FRONTEND_DIST=$(pwd)/packages/frontend/dist \
+KALEIDOSKOP_PUBLIC_ORIGIN=http://localhost:8787 \
+  npm run dev:backend
+# now /r/:id returns SSR'd HTML with run-specific OG meta
 ```
 
-## Repo layout (target — Phase 1)
+S3 mode against the dev bucket:
 
+```bash
+KALEIDOSKOP_STORAGE=s3 \
+S3_BUCKET=kaleidoskop-runs \
+S3_REGION=eu-west-1 \
+AWS_PROFILE=kaleidoskop-prod \
+  npm run dev:backend
 ```
-src/
-├── App.tsx
-├── main.tsx
-├── components/
-│   ├── HexGrid.tsx          # SVG hexagonal layout, concentric rings
-│   ├── HexParticipant.tsx   # Single participant node, color + pulse on firing
-│   ├── EdgeFlash.tsx        # Bus edge with animated event "spike"
-│   ├── PlaybackControls.tsx # Play / pause / scrub / speed
-│   ├── EventInspector.tsx   # Side panel — full JSON of selected event
-│   └── DropZone.tsx         # JSONL file upload
-├── lib/
-│   ├── parseAuditLog.ts     # JSONL → typed events
-│   ├── replayClock.ts       # zustand store driving playback
-│   └── eventColor.ts        # event-type → color mapping
-└── samples/
-    └── sample-audit-log.jsonl  # demo run (filled in when baro builds itself)
-```
+
+## End-to-end flow
+
+1. User drops a `~/.baro/runs/baro-*.jsonl` file on the page.
+2. Frontend POSTs the JSONL to `/api/runs`.
+3. Backend parses, validates, generates a `r_<base64url>` id, writes JSONL + meta to S3, returns the id.
+4. Frontend navigates to `/r/<id>` — URL is shareable.
+5. User clicks "connect" → WebSocket opens to `/api/runs/<id>/stream`.
+6. Backend reads from S3, sends `hello` envelope with run meta + participant roster.
+7. Frontend builds the dynamic honeycomb layout sized for the story count.
+8. Backend's scheduler dispatches events at configurable speed; frontend animates ripples, lifecycle transitions, recent-events list.
+9. Pause / play / set-speed / seek all round-trip to the backend — backend's `ReplaySession` halts and re-anchors its wall clock.
+10. Share button copies the URL. When pasted on Slack / Twitter / Discord, the SSR'd `/r/<id>` returns custom OG metadata + a per-run SVG thumbnail showing the actual lifecycle state.
+
+## Deploy
+
+See [`docs/DEPLOY.md`](docs/DEPLOY.md). MVP target: single `t4g.small` EC2 in a new `kaleidoskop-prod` AWS account, S3 bucket for runs, nginx TLS terminator. `kaleidoskop.jigjoy.ai` Route53 A record.
+
+## Lineage
+
+This project started as `mozaik-replay`. Renamed to `kaleidoskop` when scope graduated from "Mozaik replay demo" to "JigJoy platform tool for monitoring + analyzing Mozaik workflow activity". The earlier observability microservice that occupied the `kaleidoskop` name was renamed `kaleidoskop-spektrum` and continues to back the Spektrum platform.
 
 ## License
 

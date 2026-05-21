@@ -1,4 +1,4 @@
-import type { ParticipantInfo, ParticipantRole } from "@mozaik-replay/shared"
+import type { ParticipantInfo, ParticipantRole } from "@kaleidoskop/shared"
 
 /**
  * Parse the `source` field of an audit-log line into a normalised

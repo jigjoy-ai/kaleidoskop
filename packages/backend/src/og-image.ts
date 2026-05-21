@@ -80,7 +80,7 @@ export function renderOgImage(meta: RunMeta, parsed: ParsedRun): string {
 		`<g filter="url(#glow)">${hexes.join("")}</g>`,
 		// brand block on the right
 		`<g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" fill="#f4f1ec">`,
-		`<text x="700" y="220" font-size="38" font-weight="700">mozaik-replay</text>`,
+		`<text x="700" y="220" font-size="38" font-weight="700">kaleidoskop</text>`,
 		`<text x="700" y="270" font-size="20" opacity="0.55">${esc(meta.id)}</text>`,
 		`<text x="700" y="340" font-size="26" fill="#b97bff" opacity="0.95">${meta.eventCount} events  ·  ${meta.storyCount} stories  ·  ${durationLabel}</text>`,
 		`<text x="700" y="380" font-size="18" opacity="0.6">${meta.participantCount} participants  ·  captured ${esc(meta.createdAt.slice(0, 10))}</text>`,
