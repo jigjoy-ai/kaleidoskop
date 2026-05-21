@@ -16,7 +16,14 @@ interface Props {
 
 const STROKE_IDLE = "#2c2c3a"
 const STROKE_IDLE_HUB = "#3a3a4c"
-const STROKE_HIDDEN = "#1a1a23"
+// "hidden" used to be an almost-invisible outline (#1a1a23 + 0.14
+// opacity, no label). Now every participant from the hello roster
+// renders as a fully drawn dim-grey hex from t=0 with its label
+// visible in a muted colour. When that participant's first event
+// fires it transitions to "active" and "wakes up" — same animation
+// transition as before, but starting from "ghost" rather than from
+// "nothing". Makes the upcoming choreography legible at a glance.
+const STROKE_HIDDEN = "#23232e"
 const STROKE_COMPLETED = "#3e7a4c"
 
 function idleStrokeFor(
@@ -59,8 +66,8 @@ export function HexParticipant({
 	const strokeWidth = firing ? 2.4 : lifeState === "completed" ? 1.6 : 1.2
 
 	let opacity = 1
-	if (lifeState === "hidden") opacity = 0.14
-	if (isDimmed) opacity = lifeState === "hidden" ? 0.06 : 0.28
+	if (lifeState === "hidden") opacity = 0.55
+	if (isDimmed) opacity = lifeState === "hidden" ? 0.22 : 0.28
 
 	const labelColor = labelColorFor(
 		participant,
@@ -73,7 +80,10 @@ export function HexParticipant({
 	else if (participant.role === "observer") fontSize = 12
 	else if (participant.role === "driver") fontSize = 11
 	else fontSize = 11
-	const interactive = lifeState !== "hidden"
+	// Hidden hexes are now clickable too — they're real participants
+	// from the roster, just not active yet. Clicking pre-selects them
+	// so the inspector panel scopes future fires to that hex.
+	const interactive = true
 
 	return (
 		<motion.g
@@ -115,23 +125,21 @@ export function HexParticipant({
 					style={{ transformOrigin: "0px 0px" }}
 				/>
 			)}
-			{lifeState !== "hidden" && (
-				<text
-					textAnchor="middle"
-					dy="0.36em"
-					className="select-none pointer-events-none"
-					fill={labelColor}
-					fontSize={fontSize}
-					fontFamily="ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace"
-					fontWeight={participant.role === "conductor" ? 600 : 500}
-					style={{
-						letterSpacing:
-							participant.role === "conductor" ? "0.02em" : 0,
-					}}
-				>
-					{participant.label}
-				</text>
-			)}
+			<text
+				textAnchor="middle"
+				dy="0.36em"
+				className="select-none pointer-events-none"
+				fill={labelColor}
+				fontSize={fontSize}
+				fontFamily="ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace"
+				fontWeight={participant.role === "conductor" ? 600 : 500}
+				style={{
+					letterSpacing:
+						participant.role === "conductor" ? "0.02em" : 0,
+				}}
+			>
+				{participant.label}
+			</text>
 		</motion.g>
 	)
 }
