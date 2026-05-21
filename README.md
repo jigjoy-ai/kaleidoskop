@@ -2,7 +2,7 @@
 
 Replay visualization for [Mozaik](https://github.com/jigjoy-ai/mozaik) event-bus runs. Drop in an audit log from any Mozaik orchestration — including a [baro](https://github.com/jigjoy-ai/baro) PR build — and watch every participant, every tool call, every bus emit fire as a hexagonal neural network.
 
-> **Status:** MVP. Backend + frontend round-trip live. Variable layout up to 52 stories. Per-run shareable URLs with OG previews. AWS deploy pipeline drafted. **Domain:** `kaleidoskop.jigjoy.ai` (planned, not yet provisioned).
+> **Status:** Live in production at **[kaleidoskop.jigjoy.ai](https://kaleidoskop.jigjoy.ai)**. Drop a JSONL audit log from any Mozaik orchestration and scrub through the replay in your browser. Variable layout up to 52 stories, per-run shareable URLs with dynamic OG previews, CD from this repo's `main` to a dedicated AWS sub-account.
 
 ## What it does
 
@@ -37,15 +37,15 @@ packages/
 | ------------------------------ | --------------------------------------------------------------------------------- | ----------- |
 | **1 · Frontend MVP**           | Hex grid, replay engine, scrubbable controls, JSONL drop zone                     | **Done**    |
 | **2 · Mozaik runtime + share** | Backend replay engine, S3 persistence, per-run URLs, OG link previews             | **Done**    |
-| **3 · Deploy + polish**        | `kaleidoskop.jigjoy.ai` on AWS, dynamic OG thumbnails, run gallery, embed widget  | In progress |
+| **3 · Deploy + polish**        | `kaleidoskop.jigjoy.ai` on AWS, dynamic OG thumbnails, run gallery, embed widget  | **Done** (deploy live; gallery + dynamic OG on the roadmap)    |
 
 ## Tech stack
 
 - **Vite + React + TypeScript** — frontend build/runtime
 - **Tailwind CSS v4** — styling (`@tailwindcss/vite`)
-- **D3.js** — hex grid layout math
 - **framer-motion** — declarative edge flashes and node pulses
 - **zustand** — replay clock + selection state, dynamic participant roster
+- **Hand-rolled hex layout math** — pointy-top axial coords → pixel, ring-based positioning. d3 was on the original tech-stack list but never imported in practice; the layout problem was small enough that 30 lines of `lib/hexLayout.ts` beat pulling in a 70 kB monolith. d3 sub-packages (`d3-sankey`, `d3-scale`, `d3-force`) are reserved for future aggregate-analytics views that don't fit the live hex grid.
 - **Fastify v5** — backend HTTP + WebSocket
 - **@mozaik-ai/core 3.10** — replay engine (`AgenticEnvironment`, observer subscribe pattern)
 - **AWS SDK v3 (S3)** — audit-log persistence
