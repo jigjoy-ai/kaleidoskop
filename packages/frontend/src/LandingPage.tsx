@@ -56,44 +56,52 @@ export default function LandingPage() {
 					</a>
 				</header>
 
-				<main className="relative z-10 flex-1 flex flex-col items-center justify-center gap-8 sm:gap-10 p-6 sm:p-10">
-					<div className="max-w-2xl text-center space-y-4">
-						<h1 className="font-mono text-3xl sm:text-5xl font-semibold tracking-tight text-[var(--color-fg)]">
-							kaleidoskop
-						</h1>
-						<p className="text-sm sm:text-base text-[var(--color-fg-muted)] leading-relaxed">
-							Replay your baro / Mozaik agent runs visually. Drop in an
-							audit log and watch every bus event ripple through the agent
-							honeycomb &mdash; tool calls, model messages, story spawns,
-							verdicts, all in real time.
+				<main className="relative z-10 flex-1 flex items-center justify-center p-4 sm:p-10">
+					{/* Frosted hero panel: backdrop-blur applies to whatever
+					    snake activations are crossing behind it, dimming the
+					    motion so the title / paragraph / buttons / helper
+					    stay readable. The panel itself has a very subtle
+					    background tint so the blur has something to anchor
+					    against on pure-black areas of the lattice. */}
+					<div className="rounded-2xl border border-[var(--color-border)]/30 bg-[var(--color-bg)]/30 backdrop-blur-md shadow-[0_8px_50px_rgba(0,0,0,0.45)] px-6 py-10 sm:px-14 sm:py-14 flex flex-col items-center gap-8 sm:gap-10 max-w-3xl w-full">
+						<div className="max-w-2xl text-center space-y-4">
+							<h1 className="font-mono text-3xl sm:text-5xl font-semibold tracking-tight text-[var(--color-fg)]">
+								kaleidoskop
+							</h1>
+							<p className="text-sm sm:text-base text-[var(--color-fg-muted)] leading-relaxed">
+								Replay your baro / Mozaik agent runs visually. Drop in an
+								audit log and watch every bus event ripple through the
+								agent honeycomb &mdash; tool calls, model messages, story
+								spawns, verdicts, all in real time.
+							</p>
+						</div>
+
+						<div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full max-w-md sm:max-w-none sm:w-auto">
+							<button
+								type="button"
+								onClick={goDemo}
+								className="inline-flex items-center justify-center gap-2 rounded-md border border-[var(--color-accent-dim)] bg-[var(--color-accent)]/15 hover:bg-[var(--color-accent)]/25 px-5 sm:px-6 py-3 font-mono text-sm text-[var(--color-fg)] transition-colors shadow-[0_0_20px_rgba(185,123,255,0.18)]"
+							>
+								<span aria-hidden="true">▶</span>
+								See demo run
+							</button>
+							<button
+								type="button"
+								onClick={goUpload}
+								className="inline-flex items-center justify-center gap-2 rounded-md border border-[var(--color-border)] hover:border-[var(--color-fg-muted)] hover:bg-[#1a1a23]/60 px-5 sm:px-6 py-3 font-mono text-sm text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] transition-colors"
+							>
+								<span aria-hidden="true">⬆</span>
+								Upload baro audit log
+							</button>
+						</div>
+
+						<p className="text-[11px] text-[var(--color-fg-muted)]/60 font-mono text-center max-w-md">
+							JSONL audit logs from{" "}
+							<code className="text-[var(--color-fg-muted)]">~/.baro/runs/</code>{" "}
+							or any other Mozaik orchestration. Drag and drop works
+							anywhere on the page.
 						</p>
 					</div>
-
-					<div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full max-w-md sm:max-w-none sm:w-auto">
-						<button
-							type="button"
-							onClick={goDemo}
-							className="inline-flex items-center justify-center gap-2 rounded-md border border-[var(--color-accent-dim)] bg-[var(--color-accent)]/15 hover:bg-[var(--color-accent)]/25 px-5 sm:px-6 py-3 font-mono text-sm text-[var(--color-fg)] transition-colors shadow-[0_0_20px_rgba(185,123,255,0.18)]"
-						>
-							<span aria-hidden="true">▶</span>
-							See demo run
-						</button>
-						<button
-							type="button"
-							onClick={goUpload}
-							className="inline-flex items-center justify-center gap-2 rounded-md border border-[var(--color-border)] hover:border-[var(--color-fg-muted)] hover:bg-[#1a1a23]/60 px-5 sm:px-6 py-3 font-mono text-sm text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] transition-colors backdrop-blur-sm"
-						>
-							<span aria-hidden="true">⬆</span>
-							Upload baro audit log
-						</button>
-					</div>
-
-					<p className="text-[11px] text-[var(--color-fg-muted)]/60 font-mono text-center max-w-md">
-						JSONL audit logs from{" "}
-						<code className="text-[var(--color-fg-muted)]">~/.baro/runs/</code>{" "}
-						or any other Mozaik orchestration. Drag and drop works
-						anywhere on the page.
-					</p>
 				</main>
 
 				<footer className="relative z-10 flex items-center justify-center gap-3 px-5 py-3 border-t border-[var(--color-border)]/60 bg-[var(--color-bg-elev)]/60 backdrop-blur-sm font-mono text-[10px] uppercase tracking-[0.2em]">
