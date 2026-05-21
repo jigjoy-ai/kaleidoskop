@@ -56,6 +56,15 @@ export interface ReplayEvent {
 	sourceId: string
 	subscriberIds: readonly string[]
 	payload: string
+	/**
+	 * Original item fields from the audit log line. Carries the typed
+	 * shape of the underlying domain event so consumers can drive
+	 * behaviour off real data (e.g. `agent_state` phase, `story_result`
+	 * success) instead of relying on the human-readable payload string.
+	 * Optional — events emitted by participants that don't carry
+	 * structured fields (or sources we couldn't parse) leave this empty.
+	 */
+	data?: Record<string, unknown>
 }
 
 export interface FiringPulse {

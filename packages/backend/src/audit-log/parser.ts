@@ -99,6 +99,7 @@ export function parseAuditLogString(raw: string): ParsedRun {
 			// fill in.
 			subscriberIds: [],
 			payload: summariseItem(mapped.domain, mapped.fields, source.label),
+			data: mapped.fields,
 		})
 	}
 
