@@ -21,6 +21,8 @@ export type DomainEvent =
 	| "story_spawned"
 	| "level_started"
 	| "level_completed"
+	| "level_compute_request"
+	| "run_start_request"
 	| "run_started"
 	| "run_completed"
 	| "function_call"
@@ -34,9 +36,14 @@ export type DomainEvent =
 	| "replan"
 	| "coordination"
 	| "agent_targeted_message"
+	| "agent_user_message"
 	| "conductor_state"
 	| "claude_system"
 	| "claude_rate_limit"
+	| "claude_stream_chunk"
+	| "claude_unknown_event"
+	| "finalize_started"
+	| "pr_created"
 	| "error"
 	| "unknown"
 
@@ -100,3 +107,52 @@ export type StreamCommand =
 	| { kind: "pause" }
 	| { kind: "seek"; toMs: number }
 	| { kind: "set_speed"; speed: number }
+
+/**
+ * Per-domain subscriber roster. Sourced from baro's CORE.md +
+ * OBSERVERS.md — every BusEvent / SemanticEvent type has a known set of
+ * participants that subscribe to it (Knowledge → Conductor + Auditor;
+ * FunctionCall → Librarian + Sentry + Auditor; etc.).
+ *
+ * Audit logs don't carry subscriber lists, so the backend parser uses
+ * this matrix to enrich each event before streaming, and the frontend
+ * fan-out animation renders rippled subscriber pulses driven from it.
+ *
+ * Subscriber IDs match the canonical participant ids used in the
+ * 19-cell honeycomb (conductor / critic / surgeon / librarian / sentry
+ * / auditor / finalizer / story-factory / operator). Story-instance
+ * subscribers aren't represented here — they're per-message recipients
+ * inside `agent_targeted_message` and resolved by the caller.
+ */
+export const SUBSCRIBERS: Record<DomainEvent, readonly string[]> = {
+	agent_state: ["sentry", "auditor"],
+	story_spawn_request: ["story-factory", "auditor"],
+	story_spawned: ["auditor"],
+	level_started: ["finalizer", "auditor"],
+	level_completed: ["conductor", "auditor"],
+	level_compute_request: ["conductor", "auditor"],
+	run_start_request: ["conductor", "auditor"],
+	run_started: ["finalizer", "auditor"],
+	run_completed: ["finalizer", "conductor", "auditor"],
+	function_call: ["librarian", "sentry", "auditor"],
+	function_call_output: ["librarian", "auditor"],
+	reasoning: ["auditor"],
+	model_message: ["auditor"],
+	agent_result: ["critic", "auditor"],
+	story_result: ["surgeon", "conductor", "finalizer", "auditor"],
+	critique: ["auditor"],
+	knowledge: ["conductor", "auditor"],
+	replan: ["conductor", "auditor"],
+	coordination: ["auditor"],
+	agent_targeted_message: ["auditor"],
+	agent_user_message: ["auditor"],
+	conductor_state: ["auditor"],
+	claude_system: ["auditor"],
+	claude_rate_limit: ["auditor"],
+	claude_stream_chunk: ["auditor"],
+	claude_unknown_event: ["auditor"],
+	finalize_started: ["auditor"],
+	pr_created: ["auditor"],
+	error: ["auditor"],
+	unknown: ["auditor"],
+}

@@ -37,6 +37,8 @@ const BUCKET_OF: Partial<Record<DomainEvent, EventBucket>> = {
 	story_spawned: "spawn",
 	level_started: "lifecycle",
 	level_completed: "lifecycle",
+	level_compute_request: "lifecycle",
+	run_start_request: "lifecycle",
 	run_started: "lifecycle",
 	run_completed: "lifecycle",
 	function_call: "tool_call",
@@ -50,11 +52,28 @@ const BUCKET_OF: Partial<Record<DomainEvent, EventBucket>> = {
 	replan: "replan",
 	coordination: "replan",
 	agent_targeted_message: "message",
+	agent_user_message: "message",
 	conductor_state: "lifecycle",
 	claude_system: "lifecycle",
 	claude_rate_limit: "lifecycle",
+	claude_stream_chunk: "reasoning",
+	claude_unknown_event: "lifecycle",
+	finalize_started: "lifecycle",
+	pr_created: "lifecycle",
 	error: "error",
 	unknown: "lifecycle",
+}
+
+/**
+ * Some baro legacy events use Claude-prefixed wire names but represent
+ * the same semantic as a renamed Mozaik domain. Translate at the
+ * mapping boundary so the rest of the pipeline sees the canonical name.
+ *   - `claude_result` → `agent_result` (baro 0.34 renamed
+ *     `ClaudeResultItem` → `AgentResultItem`; legacy logs keep the old
+ *     wire string for backward compat)
+ */
+const LEGACY_DOMAIN_RENAME: Record<string, DomainEvent> = {
+	claude_result: "agent_result",
 }
 
 export interface MappedItem {
@@ -89,7 +108,8 @@ export function mapItem(item: unknown): MappedItem {
 	// side) or a user-side input echoed from Claude CLI. Both come through
 	// the same `type: "message"` discriminator on the wire; we infer the
 	// flavour from the `role` field where present.
-	let domain: DomainEvent = rawType as DomainEvent
+	let domain: DomainEvent = (LEGACY_DOMAIN_RENAME[rawType] ??
+		(rawType as DomainEvent))
 	if (rawType === "message") {
 		const role = (item as { message?: { role?: string }; role?: string })
 			.role ?? (item as { message?: { role?: string } }).message?.role
@@ -232,6 +252,20 @@ export function summariseItem(
 			const t = strField(fields, "_unknownType") ?? "?"
 			return `${sourceLabel} → ${t}`
 		}
+		case "level_compute_request":
+			return `Conductor → level compute request`
+		case "run_start_request":
+			return `${sourceLabel} → RunStartRequest`
+		case "agent_user_message":
+			return `${sourceLabel} → user message`
+		case "claude_stream_chunk":
+			return `${sourceLabel} → stream chunk`
+		case "claude_unknown_event":
+			return `${sourceLabel} → claude (unknown)`
+		case "finalize_started":
+			return `Finalizer → composing PR`
+		case "pr_created":
+			return `Finalizer → PR created`
 	}
 }
 

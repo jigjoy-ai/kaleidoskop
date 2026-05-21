@@ -1,8 +1,4 @@
-import {
-	AgenticEnvironment,
-	FunctionCallItem,
-	SemanticEvent,
-} from "@mozaik-ai/core"
+import { AgenticEnvironment } from "@mozaik-ai/core"
 import type {
 	ParticipantInfo,
 	ReplayEvent,
@@ -208,59 +204,23 @@ export class ReplaySession {
 	}
 
 	/**
-	 * Convert a recorded ReplayEvent back into a Mozaik item and push it
-	 * through the live env. The observer subscribed on the env will pick
-	 * it up via `onExternalEvent` / `onExternalFunctionCall` / … and
-	 * forward through the sink — same path real participants would take.
+	 * Forward one recorded ReplayEvent through the WS sink.
+	 *
+	 * Architecture note: the Mozaik AgenticEnvironment + ReplayParticipant
+	 * set is in place but we're intentionally **not** routing the
+	 * recorded events through `env.deliver*` yet. Doing so would force
+	 * StreamObserver to forward a second event with a fresh wall-clock
+	 * timestamp and a partially-rehydrated payload (the wire summary
+	 * doesn't carry the full original args / output / etc.), which the
+	 * frontend would receive as a duplicate of the real event.
+	 *
+	 * Once we add real downstream observers in the replay env (story-
+	 * clustering analyzer, mutation re-evaluator, …), we re-enable
+	 * `env.deliver*` calls here and have StreamObserver stop forwarding
+	 * (or dedupe by event id). For now: clean direct sink, single event
+	 * per audit-log line, full original wire data preserved.
 	 */
 	private dispatch(event: ReplayEvent): void {
-		const source = this.participantsById.get(event.sourceId)
-		if (!source) {
-			// Source wasn't discovered (e.g. plugin metadata that the
-			// parser stripped). Forward the event payload-style so the
-			// frontend still sees it, but skip the env round-trip.
-			this.sink({ kind: "event", event })
-			return
-		}
-
-		switch (event.domain) {
-			case "function_call":
-				this.env.deliverFunctionCall(
-					source,
-					FunctionCallItem.rehydrate({
-						callId: typeof event.payload === "string" ? event.payload : "",
-						name: "",
-						args: "",
-					}),
-				)
-				// The rehydrate path above can't reconstruct the full
-				// FunctionCallItem from our wire summary alone. To keep
-				// the frontend in sync, also forward the original event
-				// directly — the observer will get a duplicate but the
-				// frontend dedupes on `event.id`.
-				this.sink({ kind: "event", event })
-				return
-			case "function_call_output":
-			case "reasoning":
-			case "model_message":
-				// Same situation — wire shape lacks the full Mozaik item
-				// payload. For now, forward the event directly. A future
-				// pass can carry the raw item JSON on the wire so we
-				// genuinely round-trip through Mozaik's typed channels.
-				this.sink({ kind: "event", event })
-				return
-			default:
-				// Custom typed event — wrap as SemanticEvent and let
-				// Mozaik fan-out for real.
-				this.env.deliverSemanticEvent(
-					source,
-					new SemanticEvent(event.domain, {
-						bucket: event.bucket,
-						payload: event.payload,
-					}),
-				)
-				this.sink({ kind: "event", event })
-				return
-		}
+		this.sink({ kind: "event", event })
 	}
 }
