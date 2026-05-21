@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { DropZone, triggerUploadPicker } from "./components/DropZone"
 import { track } from "./lib/analytics"
@@ -132,10 +132,6 @@ export default function LandingPage() {
 
 const HEX_SIZE = 26
 const SQRT3 = Math.sqrt(3)
-// Big enough to over-cover ~2560×1440. We center the SVG so any extra
-// hexes spill off the edge — no need to be precise.
-const COLS = 36
-const ROWS = 32
 
 interface HexCell {
 	row: number
@@ -143,6 +139,11 @@ interface HexCell {
 	cx: number
 	cy: number
 	id: string
+}
+
+function initialViewportSize(): { w: number; h: number } {
+	if (typeof window === "undefined") return { w: 1920, h: 1080 }
+	return { w: window.innerWidth, h: window.innerHeight }
 }
 
 /** Pointy-top offset-coords neighbours. Odd rows are shifted right. */
@@ -171,35 +172,62 @@ function neighborsOf(row: number, col: number): [number, number][] {
 
 function HexBackdrop() {
 	const containerRef = useRef<SVGSVGElement>(null)
+	const [size, setSize] = useState(initialViewportSize)
 
-	const cells = useMemo<HexCell[]>(() => {
-		const list: HexCell[] = []
+	useEffect(() => {
+		const update = () => {
+			setSize({ w: window.innerWidth, h: window.innerHeight })
+		}
+		update()
+		// Debounce resize so we don't regenerate the lattice on every
+		// drag-tick of a window resize.
+		let timer: ReturnType<typeof setTimeout> | undefined
+		const debounced = () => {
+			if (timer) clearTimeout(timer)
+			timer = setTimeout(update, 150)
+		}
+		window.addEventListener("resize", debounced)
+		return () => {
+			window.removeEventListener("resize", debounced)
+			if (timer) clearTimeout(timer)
+		}
+	}, [])
+
+	const { cells, rows, cols } = useMemo(() => {
 		const colWidth = SQRT3 * HEX_SIZE
 		const rowHeight = 1.5 * HEX_SIZE
-		const offsetX = -((COLS * colWidth) / 2)
-		const offsetY = -((ROWS * rowHeight) / 2)
-		for (let r = 0; r < ROWS; r++) {
+		// One col/row of overscan on each side so the lattice tiles
+		// beyond viewport edges; no hard cutoff regardless of aspect
+		// ratio. Without this overscan, ultrawide monitors saw a
+		// fixed-COLS lattice that didn't reach the right edge.
+		const cols = Math.ceil(size.w / colWidth) + 2
+		const rows = Math.ceil(size.h / rowHeight) + 2
+		const list: HexCell[] = []
+		const xStart = -colWidth
+		const yStart = -rowHeight
+		for (let r = 0; r < rows; r++) {
 			const rowShift = r % 2 === 1 ? colWidth / 2 : 0
-			for (let c = 0; c < COLS; c++) {
+			for (let c = 0; c < cols; c++) {
 				list.push({
 					row: r,
 					col: c,
-					cx: offsetX + c * colWidth + rowShift,
-					cy: offsetY + r * rowHeight,
+					cx: xStart + c * colWidth + rowShift,
+					cy: yStart + r * rowHeight,
 					id: `hex-bg-${r}-${c}`,
 				})
 			}
 		}
-		return list
-	}, [])
+		return { cells: list, rows, cols }
+	}, [size])
 
 	// Snake animation driver. Picks a random hex, fires it, advances to a
 	// random in-bounds neighbour every tick, fades out behind itself. New
 	// snakes spawn occasionally up to a small cap. Calm by design — the
 	// landing page is a chooser, not the firehose.
 	useEffect(() => {
+		if (rows === 0 || cols === 0) return
 		const SNAKE_TICK_MS = 140
-		const SNAKE_LIFE_MS = 700 // glow persists this long before fade
+		const SNAKE_LIFE_MS = 700
 		const MAX_SNAKES = 4
 		const SPAWN_CHANCE_PER_TICK = 0.32
 		const MAX_STEPS = 14
@@ -225,8 +253,8 @@ function HexBackdrop() {
 
 		const spawnSnake = () => {
 			snakes.push({
-				row: Math.floor(Math.random() * ROWS),
-				col: Math.floor(Math.random() * COLS),
+				row: Math.floor(Math.random() * rows),
+				col: Math.floor(Math.random() * cols),
 				steps: 0,
 				maxSteps:
 					MIN_STEPS +
@@ -234,8 +262,6 @@ function HexBackdrop() {
 			})
 		}
 
-		// Seed two snakes immediately so the page isn't blank for the
-		// first 2-3 seconds.
 		spawnSnake()
 		spawnSnake()
 
@@ -249,7 +275,7 @@ function HexBackdrop() {
 					continue
 				}
 				const inBounds = neighborsOf(s.row, s.col).filter(
-					([r, c]) => r >= 0 && r < ROWS && c >= 0 && c < COLS,
+					([r, c]) => r >= 0 && r < rows && c >= 0 && c < cols,
 				)
 				if (inBounds.length === 0) {
 					snakes.splice(i, 1)
@@ -269,16 +295,14 @@ function HexBackdrop() {
 		}, SNAKE_TICK_MS)
 
 		return () => window.clearInterval(tick)
-	}, [])
-
-	const viewSize = Math.max(COLS, ROWS) * HEX_SIZE * 2
+	}, [rows, cols])
 
 	return (
 		<svg
 			ref={containerRef}
-			className="absolute inset-0 w-full h-full pointer-events-none hex-bg-svg"
-			viewBox={`${-viewSize / 2} ${-viewSize / 2} ${viewSize} ${viewSize}`}
-			preserveAspectRatio="xMidYMid slice"
+			className="fixed inset-0 w-screen h-screen pointer-events-none hex-bg-svg"
+			width={size.w}
+			height={size.h}
 			aria-hidden="true"
 		>
 			<g>
