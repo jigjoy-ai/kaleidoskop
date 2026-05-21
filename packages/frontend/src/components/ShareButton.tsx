@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useParams } from "react-router-dom"
+import { track } from "../lib/analytics"
 
 /**
  * Header pill that copies the current URL to the clipboard so the user
@@ -25,6 +26,7 @@ export function ShareButton() {
 		try {
 			await navigator.clipboard.writeText(shareTarget)
 			setState("copied")
+			track("share_clicked", { runId: params.id ?? null, target: shareTarget })
 			setTimeout(() => setState("idle"), 1800)
 		} catch {
 			setState("error")

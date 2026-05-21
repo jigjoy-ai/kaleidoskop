@@ -5,6 +5,7 @@ import type {
 	StreamMessage,
 } from "@kaleidoskop/shared"
 
+import { track } from "./analytics"
 import { useReplayClock } from "./replayClock"
 import type { AgentLifeState } from "./runScript"
 import { generateParticipants } from "./participants"
@@ -145,6 +146,7 @@ export function connectToBackend(url: string): WsClientHandle {
 				socket.send(JSON.stringify(cmd))
 			}
 		})
+		track("ws_connected", { url })
 	})
 
 	socket.addEventListener("error", () => {
@@ -177,6 +179,11 @@ export function connectToBackend(url: string): WsClientHandle {
 					store.getState().setRunDurationMs(msg.meta.durationMs)
 				}
 				store.getState().setSourceMode("live")
+				track("ws_hello_received", {
+					participantCount: msg.participants.length,
+					durationMs: msg.meta?.durationMs ?? null,
+					eventCount: msg.meta?.eventCount ?? null,
+				})
 				return
 			}
 			case "event": {
