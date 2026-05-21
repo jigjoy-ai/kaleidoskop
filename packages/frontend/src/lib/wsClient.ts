@@ -73,13 +73,22 @@ export function connectToBackend(url: string): WsClientHandle {
 		// scripted demo lifecycle/firing/ripples are wiped.
 		store.getState().resetRun()
 		store.getState().setSourceMode("connecting")
+		// Expose a command sender so PlaybackControls can round-trip
+		// play/pause/speed to the backend ReplaySession.
+		store.getState().setBackendCommandSender((cmd) => {
+			if (socket.readyState === socket.OPEN) {
+				socket.send(JSON.stringify(cmd))
+			}
+		})
 	})
 
 	socket.addEventListener("error", () => {
 		store.getState().setSourceMode("error", "WebSocket error")
+		store.getState().setBackendCommandSender(null)
 	})
 
 	socket.addEventListener("close", () => {
+		store.getState().setBackendCommandSender(null)
 		const current = store.getState().sourceMode
 		if (current === "live" || current === "connecting") {
 			store.getState().setSourceMode("demo")
@@ -106,6 +115,13 @@ export function connectToBackend(url: string): WsClientHandle {
 			}
 			case "done": {
 				store.getState().setSourceMode("demo")
+				// Close the socket so the backend can tear down its
+				// ReplaySession instead of leaving an idle WS open.
+				try {
+					socket.close()
+				} catch {
+					/* noop */
+				}
 				return
 			}
 			case "error": {

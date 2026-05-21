@@ -21,11 +21,31 @@ export function PlaybackControls() {
 	const setSpeed = useReplayClock((s) => s.setSpeed)
 	const resetRun = useReplayClock((s) => s.resetRun)
 	const selectAgent = useReplayClock((s) => s.selectAgent)
+	const backendCommandSender = useReplayClock((s) => s.backendCommandSender)
 
 	const progress = Math.min(100, (simTimeMs / RUN_DURATION_MS) * 100)
 	const selectedLabel = selectedAgentId
 		? PARTICIPANT_BY_ID.get(selectedAgentId)?.label
 		: null
+
+	// In live mode: round-trip play/pause/speed to the backend so the
+	// ReplaySession halts/resumes its scheduler instead of just freezing
+	// the on-screen animation. The local store update still fires for
+	// progress-bar + button-state consistency.
+	const handleTogglePlaying = () => {
+		const nextPlaying = !playing
+		togglePlaying()
+		if (backendCommandSender) {
+			backendCommandSender({ kind: nextPlaying ? "play" : "pause" })
+		}
+	}
+
+	const handleSetSpeed = (s: number) => {
+		setSpeed(s)
+		if (backendCommandSender) {
+			backendCommandSender({ kind: "set_speed", speed: s })
+		}
+	}
 
 	return (
 		<div className="border-t border-[var(--color-border)] bg-[var(--color-bg-elev)]">
@@ -38,7 +58,7 @@ export function PlaybackControls() {
 			<div className="flex items-center gap-3 px-4 py-2.5 text-sm">
 				<button
 					type="button"
-					onClick={togglePlaying}
+					onClick={handleTogglePlaying}
 					className="inline-flex items-center gap-2 rounded-md border border-[var(--color-border)] px-3 py-1.5 font-mono text-xs hover:bg-[#1a1a23] transition-colors"
 				>
 					<span aria-hidden="true">{playing ? "⏸" : "▶"}</span>
@@ -50,7 +70,7 @@ export function PlaybackControls() {
 						<button
 							key={s}
 							type="button"
-							onClick={() => setSpeed(s)}
+							onClick={() => handleSetSpeed(s)}
 							className={
 								"font-mono text-xs px-2 py-1 rounded transition-colors " +
 								(speed === s

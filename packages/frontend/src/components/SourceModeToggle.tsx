@@ -1,4 +1,4 @@
-import { useRef } from "react"
+import { useEffect, useRef } from "react"
 import { useReplayClock } from "../lib/replayClock"
 import { connectToBackend, type WsClientHandle } from "../lib/wsClient"
 
@@ -18,6 +18,17 @@ export function SourceModeToggle() {
 	const setSourceMode = useReplayClock((s) => s.setSourceMode)
 	const resetRun = useReplayClock((s) => s.resetRun)
 	const handleRef = useRef<WsClientHandle | null>(null)
+
+	// When the run finishes naturally (backend sends `done`) or the
+	// socket closes / errors out, the wsClient flips sourceMode back to
+	// "demo"/"error" but our local `handleRef` still points to the
+	// closed handle. Clear it here so the next `connect` click can open
+	// a fresh session.
+	useEffect(() => {
+		if (sourceMode === "demo" || sourceMode === "error") {
+			handleRef.current = null
+		}
+	}, [sourceMode])
 
 	const connect = () => {
 		if (handleRef.current) return
