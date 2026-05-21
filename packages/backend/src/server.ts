@@ -11,7 +11,7 @@ import type { WebSocket } from "ws"
 import type {
 	StreamCommand,
 	StreamMessage,
-} from "@mozaik-replay/shared"
+} from "@kaleidoskop/shared"
 
 import { parseAuditLogString } from "./audit-log/parser.js"
 import { injectOgMeta } from "./og.js"
@@ -28,24 +28,24 @@ const PORT = Number(process.env["PORT"] ?? 8787)
  * for `/r/:id` so social-platform link previews show meaningful titles.
  * Leave unset in local dev where Vite serves the SPA on :5173.
  */
-const FRONTEND_DIST = process.env["MOZAIK_REPLAY_FRONTEND_DIST"]
+const FRONTEND_DIST = process.env["KALEIDOSKOP_FRONTEND_DIST"]
 
 /**
  * Public origin used for OG `og:url` and `og:image` absolute URLs.
  * Defaults to "" which lets the meta tags use relative paths — works
  * for direct page loads but social crawlers prefer absolute URLs.
- * Set in production: `MOZAIK_REPLAY_PUBLIC_ORIGIN=https://replay.baro.rs`.
+ * Set in production: `KALEIDOSKOP_PUBLIC_ORIGIN=https://replay.baro.rs`.
  */
-const PUBLIC_ORIGIN = process.env["MOZAIK_REPLAY_PUBLIC_ORIGIN"] ?? ""
+const PUBLIC_ORIGIN = process.env["KALEIDOSKOP_PUBLIC_ORIGIN"] ?? ""
 
 /**
  * Hardcoded sample run accessible via the magic id `smoke-test`. Kept
  * so dev work and the deployed demo page can always fall back to a
- * known-good replay without uploading anything. Set MOZAIK_REPLAY_SAMPLE
+ * known-good replay without uploading anything. Set KALEIDOSKOP_SAMPLE
  * to point at a different local JSONL.
  */
 const SAMPLE_LOG_PATH =
-	process.env["MOZAIK_REPLAY_SAMPLE"] ??
+	process.env["KALEIDOSKOP_SAMPLE"] ??
 	join(homedir(), ".baro", "runs", "baro-1778482053.jsonl")
 
 /** Max accepted upload size for POST /api/runs. 50 MB covers a ~33-story run with headroom. */
@@ -77,7 +77,7 @@ async function buildServer() {
 
 	app.get("/health", async () => ({
 		status: "ok",
-		service: "mozaik-replay-backend",
+		service: "kaleidoskop-backend",
 		mozaik: "3.10.2",
 		storage: storage.constructor.name,
 		sampleLog: SAMPLE_LOG_PATH,
@@ -246,7 +246,7 @@ async function buildServer() {
 	)
 
 	// ------------------------------------------------------------------
-	// SPA + OG SSR. Active only when MOZAIK_REPLAY_FRONTEND_DIST is set
+	// SPA + OG SSR. Active only when KALEIDOSKOP_FRONTEND_DIST is set
 	// (i.e. production). Dev: Vite serves index.html on :5173 and we
 	// don't get OG injection there.
 	// ------------------------------------------------------------------
@@ -354,7 +354,7 @@ async function main() {
 	const app = await buildServer()
 	try {
 		await app.listen({ host: HOST, port: PORT })
-		app.log.info({ host: HOST, port: PORT }, "mozaik-replay-backend listening")
+		app.log.info({ host: HOST, port: PORT }, "kaleidoskop-backend listening")
 	} catch (err) {
 		app.log.error(err)
 		process.exit(1)

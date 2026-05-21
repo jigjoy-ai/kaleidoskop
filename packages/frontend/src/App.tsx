@@ -60,7 +60,7 @@ export default function App() {
 			<header className="flex items-center justify-between px-5 py-3 border-b border-[var(--color-border)] bg-[var(--color-bg-elev)]">
 				<div className="flex items-baseline gap-3">
 					<span className="font-mono text-sm font-semibold tracking-tight">
-						mozaik-replay
+						kaleidoskop
 					</span>
 					<span className="text-[11px] uppercase tracking-[0.25em] text-[var(--color-fg-muted)]">
 						{subtitle}
@@ -79,7 +79,7 @@ export default function App() {
 					<ShareButton />
 					<SourceModeToggle />
 					<a
-						href="https://github.com/jigjoy-ai/jigjoy-mozaik-replay"
+						href="https://github.com/jigjoy-ai/kaleidoskop"
 						target="_blank"
 						rel="noreferrer"
 						className="text-xs font-mono text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] transition-colors"

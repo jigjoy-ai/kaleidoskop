@@ -1,16 +1,16 @@
 {
-  "name": "mozaik-replay-monorepo",
+  "name": "kaleidoskop",
   "private": true,
   "version": "0.0.0",
   "workspaces": [
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run dev -w @mozaik-replay/frontend",
-    "dev:backend": "npm run dev -w @mozaik-replay/backend",
-    "build": "npm run build -w @mozaik-replay/shared && npm run build -w @mozaik-replay/frontend && npm run build -w @mozaik-replay/backend",
-    "build:frontend": "npm run build -w @mozaik-replay/shared && npm run build -w @mozaik-replay/frontend",
-    "build:backend": "npm run build -w @mozaik-replay/shared && npm run build -w @mozaik-replay/backend",
+    "dev": "npm run dev -w @kaleidoskop/frontend",
+    "dev:backend": "npm run dev -w @kaleidoskop/backend",
+    "build": "npm run build -w @kaleidoskop/shared && npm run build -w @kaleidoskop/frontend && npm run build -w @kaleidoskop/backend",
+    "build:frontend": "npm run build -w @kaleidoskop/shared && npm run build -w @kaleidoskop/frontend",
+    "build:backend": "npm run build -w @kaleidoskop/shared && npm run build -w @kaleidoskop/backend",
     "lint": "npm run lint -ws --if-present"
   }
 }

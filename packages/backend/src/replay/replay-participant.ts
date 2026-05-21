@@ -1,5 +1,5 @@
 import { BaseObserver } from "@mozaik-ai/core"
-import type { ParticipantInfo } from "@mozaik-replay/shared"
+import type { ParticipantInfo } from "@kaleidoskop/shared"
 
 /**
  * Stand-in participant used in replay sessions. We don't recreate the

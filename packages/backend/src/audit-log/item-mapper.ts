@@ -1,4 +1,4 @@
-import type { DomainEvent, EventBucket } from "@mozaik-replay/shared"
+import type { DomainEvent, EventBucket } from "@kaleidoskop/shared"
 
 /**
  * Normalise an audit-log `item` blob into a `{ domain, bucket, fields }`

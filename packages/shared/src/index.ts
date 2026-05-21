@@ -1,4 +1,4 @@
-// Wire types shared by the mozaik-replay frontend and backend. Anything sent
+// Wire types shared by the kaleidoskop frontend and backend. Anything sent
 // over the WebSocket stream from backend → frontend, or stored in the upload
 // payload, lives here.
 

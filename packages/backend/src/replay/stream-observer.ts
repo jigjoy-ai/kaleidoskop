@@ -1,5 +1,5 @@
 import { BaseObserver } from "@mozaik-ai/core"
-import type { StreamMessage } from "@mozaik-replay/shared"
+import type { StreamMessage } from "@kaleidoskop/shared"
 
 /**
  * Mozaik observer instance placeholder for the replay environment.

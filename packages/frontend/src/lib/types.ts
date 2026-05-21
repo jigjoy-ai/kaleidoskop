@@ -12,8 +12,8 @@ export type {
 	RunMetadata,
 	StreamCommand,
 	StreamMessage,
-} from "@mozaik-replay/shared"
-import type { ParticipantInfo } from "@mozaik-replay/shared"
+} from "@kaleidoskop/shared"
+import type { ParticipantInfo } from "@kaleidoskop/shared"
 
 // Frontend-only: layout adds ring/ringIndex to the wire ParticipantInfo.
 // Ring is open-ended (0…N) so we can grow the honeycomb beyond the
