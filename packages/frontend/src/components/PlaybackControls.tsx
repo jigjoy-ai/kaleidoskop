@@ -1,11 +1,10 @@
 import { useReplayClock } from "../lib/replayClock"
-import { RUN_DURATION_MS } from "../lib/runScript"
 import { PARTICIPANT_BY_ID } from "../lib/participants"
 
 const SPEEDS = [0.5, 1, 2, 5] as const
 
-function formatTime(ms: number): string {
-	const totalSec = Math.min(RUN_DURATION_MS, ms) / 1000
+function formatTime(ms: number, capMs: number): string {
+	const totalSec = Math.min(capMs, ms) / 1000
 	const m = Math.floor(totalSec / 60)
 	const s = Math.floor(totalSec % 60)
 	return `${m}:${s.toString().padStart(2, "0")}`
@@ -16,6 +15,7 @@ export function PlaybackControls() {
 	const speed = useReplayClock((s) => s.speed)
 	const eventCount = useReplayClock((s) => s.eventCount)
 	const simTimeMs = useReplayClock((s) => s.simTimeMs)
+	const runDurationMs = useReplayClock((s) => s.runDurationMs)
 	const selectedAgentId = useReplayClock((s) => s.selectedAgentId)
 	const togglePlaying = useReplayClock((s) => s.togglePlaying)
 	const setSpeed = useReplayClock((s) => s.setSpeed)
@@ -23,7 +23,10 @@ export function PlaybackControls() {
 	const selectAgent = useReplayClock((s) => s.selectAgent)
 	const backendCommandSender = useReplayClock((s) => s.backendCommandSender)
 
-	const progress = Math.min(100, (simTimeMs / RUN_DURATION_MS) * 100)
+	const progress =
+		runDurationMs > 0
+			? Math.min(100, (simTimeMs / runDurationMs) * 100)
+			: 0
 	const selectedLabel = selectedAgentId
 		? PARTICIPANT_BY_ID.get(selectedAgentId)?.label
 		: null
@@ -107,11 +110,11 @@ export function PlaybackControls() {
 					<span>
 						t:{" "}
 						<span className="text-[var(--color-fg)]">
-							{formatTime(simTimeMs)}
+							{formatTime(simTimeMs, runDurationMs)}
 						</span>
 						<span className="text-[var(--color-fg-muted)]/60">
 							{" / "}
-							{formatTime(RUN_DURATION_MS)}
+							{formatTime(runDurationMs, runDurationMs)}
 						</span>
 					</span>
 					<span>

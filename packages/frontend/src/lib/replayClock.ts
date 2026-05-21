@@ -21,11 +21,20 @@ export const RIPPLE_VISUAL_DURATION_MS = 700
 
 export type SourceMode = "demo" | "live" | "connecting" | "error"
 
+const DEFAULT_RUN_DURATION_MS = 45000
+
 interface ReplayState {
 	playing: boolean
 	speed: number
 	eventCount: number
 	simTimeMs: number
+	/**
+	 * Total run length. Scripted demo defaults to 45 s (matches
+	 * RUN_DURATION_MS in runScript.ts); live mode overwrites this from
+	 * the `hello.meta.durationMs` envelope so the progress bar tracks
+	 * the real audit log's wall-clock span.
+	 */
+	runDurationMs: number
 
 	firing: Record<string, FiringPulse>
 	activeRipples: ReplayEvent[]
@@ -59,6 +68,8 @@ interface ReplayState {
 	tick: (now: number) => void
 
 	setSimTime: (t: number) => void
+	setRunDurationMs: (ms: number) => void
+	resetRunDuration: () => void
 	setAgentStates: (states: Record<string, AgentLifeState>) => void
 
 	selectAgent: (id: string | null) => void
@@ -85,6 +96,7 @@ export const useReplayClock = create<ReplayState>((set, get) => ({
 	speed: 1,
 	eventCount: 0,
 	simTimeMs: 0,
+	runDurationMs: DEFAULT_RUN_DURATION_MS,
 
 	firing: {},
 	activeRipples: [],
@@ -127,6 +139,11 @@ export const useReplayClock = create<ReplayState>((set, get) => ({
 
 	tick: (now) =>
 		set((s) => {
+			// While paused, freeze firing/ripples — otherwise wall-clock
+			// keeps marching and within a couple seconds every halo
+			// expires, so resume looks like a hard restart instead of a
+			// continuation.
+			if (!s.playing) return s
 			const nextFiring: Record<string, FiringPulse> = {}
 			for (const [id, pulse] of Object.entries(s.firing)) {
 				if (now - pulse.at < FIRE_HOLD_MS) nextFiring[id] = pulse
@@ -144,6 +161,8 @@ export const useReplayClock = create<ReplayState>((set, get) => ({
 		}),
 
 	setSimTime: (t) => set({ simTimeMs: t }),
+	setRunDurationMs: (ms) => set({ runDurationMs: ms }),
+	resetRunDuration: () => set({ runDurationMs: DEFAULT_RUN_DURATION_MS }),
 	setAgentStates: (states) => {
 		const prev = get().agentState
 		let same = Object.keys(prev).length === Object.keys(states).length
