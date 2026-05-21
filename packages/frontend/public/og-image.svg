@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="65%">
+      <stop offset="0%" stop-color="#1a1421" />
+      <stop offset="100%" stop-color="#08060c" />
+    </radialGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <symbol id="hex" viewBox="-50 -50 100 100">
+      <polygon points="0,-50 43.3,-25 43.3,25 0,50 -43.3,25 -43.3,-25" fill="none" stroke="currentColor" stroke-width="2.4" />
+    </symbol>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)" />
+
+  <g transform="translate(420, 315)" filter="url(#glow)">
+    <!-- ring 0 -->
+    <g color="#b97bff"><use href="#hex" /></g>
+    <!-- ring 1 (6) -->
+    <g color="#5dd6e8" opacity="0.85">
+      <use href="#hex" transform="translate(85,0)" />
+      <use href="#hex" transform="translate(42.5,73.6)" />
+      <use href="#hex" transform="translate(-42.5,73.6)" />
+      <use href="#hex" transform="translate(-85,0)" />
+      <use href="#hex" transform="translate(-42.5,-73.6)" />
+      <use href="#hex" transform="translate(42.5,-73.6)" />
+    </g>
+    <!-- ring 2 (12, dimmed) -->
+    <g color="#7fd97f" opacity="0.45">
+      <use href="#hex" transform="translate(170,0)" />
+      <use href="#hex" transform="translate(127.5,73.6)" />
+      <use href="#hex" transform="translate(85,147.2)" />
+      <use href="#hex" transform="translate(0,147.2)" />
+      <use href="#hex" transform="translate(-85,147.2)" />
+      <use href="#hex" transform="translate(-127.5,73.6)" />
+      <use href="#hex" transform="translate(-170,0)" />
+      <use href="#hex" transform="translate(-127.5,-73.6)" />
+      <use href="#hex" transform="translate(-85,-147.2)" />
+      <use href="#hex" transform="translate(0,-147.2)" />
+      <use href="#hex" transform="translate(85,-147.2)" />
+      <use href="#hex" transform="translate(127.5,-73.6)" />
+    </g>
+  </g>
+
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" fill="#f4f1ec">
+    <text x="700" y="265" font-size="58" font-weight="700">mozaik-replay</text>
+    <text x="700" y="320" font-size="22" opacity="0.7">agent runs as a hexagonal neural firing</text>
+    <text x="700" y="395" font-size="18" fill="#b97bff" opacity="0.9">jigjoy-ai · mozaik · baro</text>
+  </g>
+</svg>

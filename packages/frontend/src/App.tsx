@@ -5,6 +5,7 @@ import { EventInspector } from "./components/EventInspector"
 import { EventLegend } from "./components/EventLegend"
 import { HexGrid } from "./components/HexGrid"
 import { PlaybackControls } from "./components/PlaybackControls"
+import { ShareButton } from "./components/ShareButton"
 import { SourceModeToggle } from "./components/SourceModeToggle"
 import { ZoomControls } from "./components/ZoomControls"
 import { useReplayDriver } from "./lib/useReplayDriver"
@@ -64,6 +65,7 @@ export default function App() {
 						<span aria-hidden="true">⬆</span>
 						upload
 					</button>
+					<ShareButton />
 					<SourceModeToggle />
 					<a
 						href="https://github.com/jigjoy-ai/jigjoy-mozaik-replay"
