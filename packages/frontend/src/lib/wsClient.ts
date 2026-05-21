@@ -143,6 +143,7 @@ export function connectToBackend(url: string): WsClientHandle {
 
 	socket.addEventListener("close", () => {
 		store.getState().setBackendCommandSender(null)
+		store.getState().resetRunDuration()
 		const current = store.getState().sourceMode
 		if (current === "live" || current === "connecting") {
 			store.getState().setSourceMode("demo")
@@ -160,6 +161,9 @@ export function connectToBackend(url: string): WsClientHandle {
 		switch (msg.kind) {
 			case "hello": {
 				handleHello(msg.participants, remap, lifecycle)
+				if (msg.meta?.durationMs && msg.meta.durationMs > 0) {
+					store.getState().setRunDurationMs(msg.meta.durationMs)
+				}
 				store.getState().setSourceMode("live")
 				return
 			}
@@ -235,6 +239,14 @@ function handleEvent(
 
 	if (lifecycle.apply(remappedEvent, remappedSource)) {
 		useReplayClock.getState().setAgentStates(lifecycle.snapshot())
+	}
+
+	// Advance the playback clock to the latest event timestamp so the
+	// progress bar tracks where we are inside the run. Don't go
+	// backwards — events can arrive slightly out of order on the wire.
+	const currentSim = useReplayClock.getState().simTimeMs
+	if (remappedEvent.at > currentSim) {
+		useReplayClock.getState().setSimTime(remappedEvent.at)
 	}
 
 	useReplayClock.getState().emit(remappedEvent)
