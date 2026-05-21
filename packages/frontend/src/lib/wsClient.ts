@@ -195,7 +195,14 @@ export function connectToBackend(url: string): WsClientHandle {
 				return
 			}
 			case "done": {
-				store.getState().setSourceMode("demo")
+				// Run completed naturally. Don't reset state, don't
+				// flip back to "demo" — that would let the scripted
+				// driver kick in on top of the loaded events, and the
+				// auto-connect effect would immediately re-open a
+				// socket and replay the whole thing. "finished" tells
+				// the rest of the app: lifecycle is final, no more
+				// events incoming, but the timeline stays scrubbable.
+				store.getState().setSourceMode("finished")
 				try {
 					socket.close()
 				} catch {
