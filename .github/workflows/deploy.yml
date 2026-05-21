@@ -1,0 +1,110 @@
+name: deploy
+
+# CD: on every push to main, rebuild + ship to the prod EC2.
+#
+# Current implementation: SSH + rsync. The kaleidoskop EC2 runs the
+# backend directly under systemd, so we just sync the dist tree and
+# restart the service. ~30-40s end-to-end including build.
+#
+# Future upgrade (matches platform-edge / ai-coding in jigjoy-infra):
+#   - Add a Dockerfile that bakes frontend dist into the backend image
+#   - ECR repo `kaleidoskop` in account 714930739130
+#   - IAM `github-actions-deployer` user with ECR push + SSM SendCommand
+#   - Replace the SSH steps with:
+#       aws-actions/configure-aws-credentials
+#       aws-actions/amazon-ecr-login
+#       docker buildx build --push
+#       aws ssm send-command --document AWS-RunShellScript --parameters
+#         commands=["docker pull <image>; docker stop kaleidoskop;
+#                    docker run -d --name kaleidoskop ... <image>"]
+#   That avoids the SSH key in secrets and gives us versioned, rollback-
+#   able artefacts. Not worth it at MVP scale yet.
+
+on:
+    push:
+        branches: [main]
+    workflow_dispatch:
+
+concurrency:
+    group: deploy-prod
+    cancel-in-progress: false
+
+permissions:
+    contents: read
+
+jobs:
+    deploy:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node 22
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: npm
+
+            - name: Install workspaces
+              run: npm ci
+
+            - name: Build (frontend + backend, PostHog baked in)
+              env:
+                  VITE_POSTHOG_KEY: ${{ secrets.VITE_POSTHOG_KEY }}
+                  VITE_POSTHOG_HOST: ${{ secrets.VITE_POSTHOG_HOST }}
+              run: npm run build
+
+            - name: Configure SSH
+              env:
+                  SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+                  EC2_HOST: ${{ secrets.EC2_HOST }}
+              run: |
+                  mkdir -p ~/.ssh
+                  echo "$SSH_KEY" > ~/.ssh/deploy.pem
+                  chmod 600 ~/.ssh/deploy.pem
+                  ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+            - name: Rsync source tree to EC2
+              env:
+                  EC2_HOST: ${{ secrets.EC2_HOST }}
+                  EC2_USER: ${{ secrets.EC2_USER }}
+              run: |
+                  # Sync everything except .git / node_modules / runtime
+                  # fs storage. Source TS files come along so future SSH
+                  # debugging on the box can grep, but the systemd unit
+                  # only runs the compiled dist/.
+                  rsync -avz --delete-after \
+                    --exclude='.git' \
+                    --exclude='node_modules' \
+                    --exclude='packages/backend/storage' \
+                    --exclude='.github' \
+                    -e "ssh -i ~/.ssh/deploy.pem -o StrictHostKeyChecking=no" \
+                    ./ "${EC2_USER}@${EC2_HOST}:/opt/kaleidoskop/"
+
+            - name: Install production deps + restart on EC2
+              env:
+                  EC2_HOST: ${{ secrets.EC2_HOST }}
+                  EC2_USER: ${{ secrets.EC2_USER }}
+              run: |
+                  ssh -i ~/.ssh/deploy.pem -o StrictHostKeyChecking=no \
+                      "${EC2_USER}@${EC2_HOST}" \
+                      'set -e
+                       cd /opt/kaleidoskop
+                       npm install --omit=dev --no-audit --no-fund
+                       sudo systemctl restart kaleidoskop
+                       sleep 1
+                       systemctl is-active kaleidoskop'
+
+            - name: Verify deploy
+              env:
+                  EC2_HOST: ${{ secrets.EC2_HOST }}
+              run: |
+                  # Use the EC2 host directly (resolves at runner) and
+                  # check the SSR /r/smoke-test path which exercises both
+                  # the static fastify-static plugin and the OG injector.
+                  curl -sfI --resolve "kaleidoskop.jigjoy.ai:443:${EC2_HOST}" \
+                       https://kaleidoskop.jigjoy.ai/health
+                  curl -sf  --resolve "kaleidoskop.jigjoy.ai:443:${EC2_HOST}" \
+                       https://kaleidoskop.jigjoy.ai/health | grep -q '"storage":"S3RunStorage"'
+                  echo "deploy ok"
