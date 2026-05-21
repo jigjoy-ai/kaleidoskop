@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { useParams } from "react-router-dom"
+import { useParams, useSearchParams } from "react-router-dom"
 import { DropZone, triggerUploadPicker } from "./components/DropZone"
 import { EventInspector } from "./components/EventInspector"
 import { EventLegend } from "./components/EventLegend"
@@ -15,7 +15,15 @@ import { useReplayClock } from "./lib/replayClock"
 export default function App() {
 	useReplayDriver()
 	const params = useParams<{ id?: string }>()
+	const [searchParams] = useSearchParams()
 	const runId = params.id ?? null
+	// Embed mode: when iframe'd into jigjoy.ai/mozaik or any external
+	// host, strip the header / legend / inspector / playback controls
+	// and just render the bare hex grid. ?embed=true (or ?embed=1)
+	// activates it.
+	const isEmbed =
+		searchParams.get("embed") === "true" ||
+		searchParams.get("embed") === "1"
 	const selectAgent = useReplayClock((s) => s.selectAgent)
 	const sourceMode = useReplayClock((s) => s.sourceMode)
 
@@ -52,6 +60,27 @@ export default function App() {
 		if (runId) return `ready · run ${runId.slice(0, 10)}`
 		return "scripted demo run"
 	})()
+
+	if (isEmbed) {
+		// Stripped-down render for iframe embeds (e.g. jigjoy.ai/mozaik
+		// product page). Just the hex grid filling its container, no
+		// chrome. SourceModeToggle still auto-connects to whichever run
+		// id was passed in the URL, so the embed plays the same
+		// replay any visitor would see on the standalone page.
+		return (
+			<div className="h-full w-full flex items-center justify-center p-2 sm:p-4 overflow-hidden bg-[var(--color-bg)]">
+				<div className="w-full h-full max-w-[760px] aspect-square">
+					<HexGrid />
+				</div>
+				{/* SourceModeToggle has no visible UI to render here, but its
+				    auto-connect-on-smoke-test useEffect still fires off-screen
+				    so the embed picks up the live stream. */}
+				<div className="hidden">
+					<SourceModeToggle />
+				</div>
+			</div>
+		)
+	}
 
 	return (
 		<div className="h-full flex flex-col">
