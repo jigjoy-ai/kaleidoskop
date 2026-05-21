@@ -93,10 +93,26 @@ export interface RunMetadata {
 	source?: string
 }
 
+/**
+ * State reconstruction at a specific point in the run. Emitted by the
+ * backend after a seek so the frontend can restore "what was visible
+ * at this moment" — which hexes are completed, what the inspector
+ * sidebar showed — without having to silently re-play every event
+ * from 0 to the seek point.
+ */
+export interface ReplayStateSnapshot {
+	atMs: number
+	eventCount: number
+	agentState: Record<string, AgentLifeState>
+	/** Up to N most recent events at the seek point, newest first. */
+	recent: ReplayEvent[]
+}
+
 // Top-level message envelope on the WebSocket stream backend → frontend.
 export type StreamMessage =
 	| { kind: "hello"; meta: RunMetadata; participants: ParticipantInfo[] }
 	| { kind: "event"; event: ReplayEvent }
+	| { kind: "snapshot"; snapshot: ReplayStateSnapshot }
 	| { kind: "done" }
 	| { kind: "error"; message: string }
 

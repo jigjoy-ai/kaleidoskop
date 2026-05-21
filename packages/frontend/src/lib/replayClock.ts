@@ -71,6 +71,20 @@ interface ReplayState {
 	setRunDurationMs: (ms: number) => void
 	resetRunDuration: () => void
 	setAgentStates: (states: Record<string, AgentLifeState>) => void
+	/**
+	 * Replace the entire post-seek state in one shot. Used by the
+	 * WS client when the backend emits a `snapshot` message — restores
+	 * agentState, eventCount, and recent-events list to what would have
+	 * been visible at the seek target. Ephemeral visuals (firing /
+	 * ripples) get cleared so we don't carry a "frozen" pulse from the
+	 * previous position into the new one.
+	 */
+	applySnapshot: (snap: {
+		atMs: number
+		eventCount: number
+		agentState: Record<string, AgentLifeState>
+		recent: ReplayEvent[]
+	}) => void
 
 	selectAgent: (id: string | null) => void
 	setPausedFocus: (e: ReplayEvent | null) => void
@@ -163,6 +177,16 @@ export const useReplayClock = create<ReplayState>((set, get) => ({
 	setSimTime: (t) => set({ simTimeMs: t }),
 	setRunDurationMs: (ms) => set({ runDurationMs: ms }),
 	resetRunDuration: () => set({ runDurationMs: DEFAULT_RUN_DURATION_MS }),
+	applySnapshot: (snap) =>
+		set({
+			simTimeMs: snap.atMs,
+			eventCount: snap.eventCount,
+			agentState: snap.agentState,
+			recent: snap.recent,
+			firing: {},
+			activeRipples: [],
+			pausedFocus: null,
+		}),
 	setAgentStates: (states) => {
 		const prev = get().agentState
 		let same = Object.keys(prev).length === Object.keys(states).length

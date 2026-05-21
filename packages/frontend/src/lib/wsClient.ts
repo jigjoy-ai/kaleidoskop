@@ -1,6 +1,7 @@
 import type {
 	ParticipantInfo,
 	ReplayEvent,
+	ReplayStateSnapshot,
 	StreamMessage,
 } from "@mozaik-replay/shared"
 
@@ -72,6 +73,16 @@ class LiveLifecycle {
 
 	snapshot(): Record<string, AgentLifeState> {
 		return Object.fromEntries(this.states.entries())
+	}
+
+	/**
+	 * Replace the entire lifecycle map. Called by the snapshot handler
+	 * after a seek so subsequent event transitions branch off the
+	 * backend-computed state rather than whatever we had accumulated
+	 * before the scrub.
+	 */
+	reset(states: Record<string, AgentLifeState>): void {
+		this.states = new Map(Object.entries(states))
 	}
 
 	private resolveNext(
@@ -171,6 +182,10 @@ export function connectToBackend(url: string): WsClientHandle {
 				handleEvent(msg.event, remap, lifecycle)
 				return
 			}
+			case "snapshot": {
+				handleSnapshot(msg.snapshot, remap, lifecycle)
+				return
+			}
 			case "done": {
 				store.getState().setSourceMode("demo")
 				try {
@@ -250,4 +265,42 @@ function handleEvent(
 	}
 
 	useReplayClock.getState().emit(remappedEvent)
+}
+
+function handleSnapshot(
+	snap: ReplayStateSnapshot,
+	remap: (id: string) => string,
+	lifecycle: LiveLifecycle,
+): void {
+	// Remap backend ids onto layout ids and drop anything we can't
+	// render. Snapshot semantics: replace state wholesale at the
+	// seek-target moment.
+	const remappedState: Record<string, AgentLifeState> = {}
+	for (const [backendId, state] of Object.entries(snap.agentState)) {
+		const layoutId = remap(backendId)
+		if (PARTICIPANT_BY_ID.has(layoutId)) {
+			remappedState[layoutId] = state
+		}
+	}
+	lifecycle.reset(remappedState)
+
+	const remappedRecent: ReplayEvent[] = []
+	for (const e of snap.recent) {
+		const source = remap(e.sourceId)
+		if (!PARTICIPANT_BY_ID.has(source)) continue
+		remappedRecent.push({
+			...e,
+			sourceId: source,
+			subscriberIds: e.subscriberIds
+				.map(remap)
+				.filter((id) => PARTICIPANT_BY_ID.has(id)),
+		})
+	}
+
+	useReplayClock.getState().applySnapshot({
+		atMs: snap.atMs,
+		eventCount: snap.eventCount,
+		agentState: remappedState,
+		recent: remappedRecent,
+	})
 }

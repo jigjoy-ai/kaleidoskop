@@ -1,7 +1,9 @@
 import { AgenticEnvironment } from "@mozaik-ai/core"
 import type {
+	AgentLifeState,
 	ParticipantInfo,
 	ReplayEvent,
+	ReplayStateSnapshot,
 	StreamCommand,
 	StreamMessage,
 } from "@mozaik-replay/shared"
@@ -128,9 +130,11 @@ export class ReplaySession {
 	}
 
 	seek(toMs: number): void {
-		// Naive seek: rewind cursor to first event with at >= target,
-		// reset clock. Doesn't replay missed events — events that haven't
-		// fired yet wait for the new clock to reach them.
+		// Move cursor to first event with at >= target, reset clock, and
+		// emit a state snapshot covering everything before that point.
+		// The frontend uses the snapshot to restore agentState +
+		// recent-events list to "what would be visible at this moment",
+		// then resumes streaming from the cursor.
 		const target = Math.max(0, Math.floor(toMs))
 		this.simMs = target
 		this.cursor = 0
@@ -142,11 +146,49 @@ export class ReplaySession {
 		}
 		this.wallStartedAt = Date.now()
 		this.wallSimAtStart = this.simMs
+		this.sink({
+			kind: "snapshot",
+			snapshot: this.computeSnapshot(target),
+		})
 		if (this.playing && this.timer !== null) {
 			clearTimeout(this.timer)
 			this.timer = null
 			this.scheduleNext()
 		}
+	}
+
+	/**
+	 * Walk every event with at <= target and accumulate the lifecycle
+	 * state + recent-events list that the frontend should display at
+	 * that moment. Pure function over `this.events` — doesn't mutate
+	 * cursor / simMs / playing flags.
+	 */
+	private computeSnapshot(target: number): ReplayStateSnapshot {
+		const agentState: Record<string, AgentLifeState> = {}
+		const recent: ReplayEvent[] = []
+		let eventCount = 0
+		for (const event of this.events) {
+			if (event.at > target) break
+			eventCount++
+			recent.push(event)
+			const cur = agentState[event.sourceId]
+			if (event.domain === "agent_state") {
+				const phase = (event.data?.["phase"] ?? "") as string
+				if (phase === "done" || phase === "failed" || phase === "aborted") {
+					agentState[event.sourceId] = "completed"
+				} else if (cur !== "completed") {
+					agentState[event.sourceId] = "active"
+				}
+			} else if (event.domain === "story_result") {
+				agentState[event.sourceId] = "completed"
+			} else if (cur !== "completed") {
+				agentState[event.sourceId] = "active"
+			}
+		}
+		// Cap at the same 60-event window the frontend tracks; newest-first
+		// so the inspector sidebar matches what live streaming produces.
+		const tail = recent.slice(-60).reverse()
+		return { atMs: target, eventCount, agentState, recent: tail }
 	}
 
 	stop(): void {
