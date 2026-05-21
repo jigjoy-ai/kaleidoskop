@@ -1,6 +1,8 @@
 node_modules/
 dist/
 
-# Local fs-mode run storage. In dev MOZAIK_REPLAY_STORAGE defaults to
-# `fs` and writes here; in prod we use S3. Don't track uploads.
-storage/
+# Local fs-mode upload storage (runtime data, not source). Path is
+# relative to where the backend runs — process.cwd() — not to this
+# .gitignore file. So this matches `./storage/` next to wherever we
+# invoke `node server.js`, not the src/storage/ source folder.
+/storage/

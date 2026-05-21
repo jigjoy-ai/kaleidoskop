@@ -10,7 +10,7 @@ export { S3RunStorage } from "./s3-storage.js"
 /**
  * Pick the storage backend from environment. Defaults to filesystem so
  * local dev works without any AWS setup. In production set:
- *   MOZAIK_REPLAY_STORAGE=s3
+ *   KALEIDOSKOP_STORAGE=s3
  *   S3_BUCKET=<your bucket>
  *   S3_REGION=<region>             (optional; SDK default chain applies)
  *   S3_KEY_PREFIX=runs/            (optional; default "runs/")
@@ -19,12 +19,12 @@ export { S3RunStorage } from "./s3-storage.js"
  * locally, IAM role on EC2/ECS. Don't hard-code AWS_ACCESS_KEY_ID here.
  */
 export function createStorageFromEnv(): RunStorage {
-	const mode = (process.env["MOZAIK_REPLAY_STORAGE"] ?? "fs").toLowerCase()
+	const mode = (process.env["KALEIDOSKOP_STORAGE"] ?? "fs").toLowerCase()
 	if (mode === "s3") {
 		const bucket = process.env["S3_BUCKET"]
 		if (!bucket) {
 			throw new Error(
-				"MOZAIK_REPLAY_STORAGE=s3 requires S3_BUCKET env var",
+				"KALEIDOSKOP_STORAGE=s3 requires S3_BUCKET env var",
 			)
 		}
 		return new S3RunStorage(
@@ -35,11 +35,11 @@ export function createStorageFromEnv(): RunStorage {
 	}
 	if (mode === "fs") {
 		const dir =
-			process.env["MOZAIK_REPLAY_STORAGE_DIR"] ??
+			process.env["KALEIDOSKOP_STORAGE_DIR"] ??
 			join(process.cwd(), "storage", "runs")
 		return new FsRunStorage(dir)
 	}
 	throw new Error(
-		`Unknown MOZAIK_REPLAY_STORAGE=${mode}; expected "fs" or "s3"`,
+		`Unknown KALEIDOSKOP_STORAGE=${mode}; expected "fs" or "s3"`,
 	)
 }
