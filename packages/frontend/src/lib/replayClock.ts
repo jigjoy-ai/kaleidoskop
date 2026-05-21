@@ -22,7 +22,23 @@ export const RIPPLE_SPEED_PX_PER_SEC = 760
 export const RIPPLE_MAX_RADIUS = 360
 export const RIPPLE_VISUAL_DURATION_MS = 700
 
-export type SourceMode = "demo" | "live" | "connecting" | "error"
+/**
+ * Replay clock source modes.
+ *
+ *   demo       — scripted-demo loop owns the simulation (no backend)
+ *   connecting — backend socket opening, awaiting hello
+ *   live       — backend hello received, events streaming in
+ *   finished   — backend sent `done`, socket closed; events stay
+ *                visible and the timeline stays scrubbable. Explicit
+ *                product call: never auto-clear a finished run.
+ *   error      — connect failed or backend pushed `error`
+ */
+export type SourceMode =
+	| "demo"
+	| "live"
+	| "connecting"
+	| "finished"
+	| "error"
 
 const DEFAULT_RUN_DURATION_MS = 45000
 
