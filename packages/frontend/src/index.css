@@ -33,3 +33,47 @@ body {
 	scrollbar-width: thin;
 	scrollbar-color: #2a2a36 transparent;
 }
+
+/* ─────────────────────────────────────────────────────────────────── */
+/* HexBackdrop — landing-page background. Hex cells idle at ~7% opacity */
+/* faintly outlining a lattice. The `hex-bg-fired` class is added when */
+/* a snake activation reaches a cell; CSS transitions handle the rest: */
+/*   - Adding `.fired` snaps stroke to purple + drop-shadow glow in    */
+/*     ~80ms (eye registers it as instantaneous "firing").             */
+/*   - Removing `.fired` lets the cell fade back to idle over ~1.4s    */
+/*     (the visible "trail" of the snake).                             */
+/* The trick: each class carries its own `transition` spec, so the     */
+/* incoming and outgoing animations have different durations.          */
+/* ─────────────────────────────────────────────────────────────────── */
+
+.hex-bg-svg {
+	color: var(--color-fg);
+}
+
+.hex-bg-cell {
+	fill: none;
+	stroke: rgba(244, 241, 236, 0.08);
+	stroke-width: 0.6;
+	transition: stroke 1400ms ease-out, stroke-width 1400ms ease-out,
+		filter 1400ms ease-out, opacity 1400ms ease-out;
+	opacity: 1;
+	will-change: stroke, filter;
+}
+
+.hex-bg-cell.hex-bg-fired {
+	stroke: var(--color-accent);
+	stroke-width: 1.4;
+	filter: drop-shadow(0 0 4px var(--color-accent))
+		drop-shadow(0 0 12px rgba(185, 123, 255, 0.55));
+	transition: stroke 80ms ease-in, stroke-width 80ms ease-in,
+		filter 80ms ease-in;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.hex-bg-cell {
+		transition: none;
+	}
+	.hex-bg-cell.hex-bg-fired {
+		transition: none;
+	}
+}
