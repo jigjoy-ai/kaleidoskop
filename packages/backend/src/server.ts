@@ -15,6 +15,7 @@ import type {
 
 import { parseAuditLogString } from "./audit-log/parser.js"
 import { injectOgMeta } from "./og.js"
+import { renderOgImage } from "./og-image.js"
 import { ReplaySession } from "./replay/engine.js"
 import { createStorageFromEnv, type RunMeta, type RunStorage } from "./storage/index.js"
 
@@ -157,6 +158,26 @@ async function buildServer() {
 				return { error: "not_found", message: `Run ${id} not found.` }
 			}
 			return meta
+		},
+	)
+
+	app.get<{ Params: { id: string } }>(
+		"/api/runs/:id/og.svg",
+		async (request, reply) => {
+			const { id } = request.params
+			try {
+				const { parsed, meta } = await loadRunWithMeta(id, storage)
+				const svg = renderOgImage(meta, parsed)
+				reply
+					.type("image/svg+xml; charset=utf-8")
+					.header("cache-control", "public, max-age=3600")
+					.send(svg)
+			} catch (err) {
+				reply.code(404).send({
+					error: "not_found",
+					message: (err as Error).message,
+				})
+			}
 		},
 	)
 
@@ -306,6 +327,27 @@ async function loadRun(id: string, storage: RunStorage) {
 	}
 	const content = await storage.get(id)
 	return { parsed: parseAuditLogString(content), source: `storage:${id}` }
+}
+
+async function loadRunWithMeta(id: string, storage: RunStorage) {
+	const { parsed } = await loadRun(id, storage)
+	const meta: RunMeta =
+		id === "smoke-test"
+			? {
+					id,
+					createdAt: parsed.startedAt,
+					durationMs: parsed.durationMs,
+					participantCount: parsed.participants.length,
+					storyCount: parsed.participants.filter((p) => p.role === "story")
+						.length,
+					eventCount: parsed.events.length,
+					sizeBytes: 0,
+					uploadedAt: parsed.startedAt,
+				}
+			: ((await storage.getMeta(id)) ?? (() => {
+					throw new Error(`Run ${id} meta missing`)
+				})())
+	return { parsed, meta }
 }
 
 async function main() {

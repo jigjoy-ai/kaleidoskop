@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react"
+import { useParams } from "react-router-dom"
 import {
 	RIPPLE_SPEED_PX_PER_SEC,
 	useReplayClock,
@@ -62,6 +63,11 @@ function distance(a: string, b: string): number {
 
 export function useReplayDriver() {
 	const playing = useReplayClock((s) => s.playing)
+	// When the URL points at a specific run (`/r/:id`), suppress the
+	// scripted demo so the page is a clean slate awaiting the user's
+	// "connect" click. Otherwise (`/`) the scripted run loops as before.
+	const params = useParams<{ id?: string }>()
+	const onRunPage = !!params.id
 	const prevActiveRef = useRef<Set<string>>(new Set())
 	const triggeredRef = useRef<Map<string, Set<string>>>(new Map())
 
@@ -90,11 +96,15 @@ export function useReplayDriver() {
 
 			let nextSim = state.simTimeMs + dt
 			const live = state.sourceMode === "live" || state.sourceMode === "connecting"
+			// Demo emissions also pause when the URL is on `/r/:id` — the
+			// page belongs to a specific real run, no scripted noise.
+			const demoSuppressed = live || onRunPage
 
 			// Demo-mode scripted run owns the simTime + agent lifecycle.
-			// In live mode the WS client owns those — the frame loop here
-			// only handles ripple → subscriber pacing and stale-state GC.
-			if (!live) {
+			// In live mode (or on a run page) the WS client owns those —
+			// the frame loop here only handles ripple → subscriber pacing
+			// and stale-state GC.
+			if (!demoSuppressed) {
 				if (nextSim > RUN_DURATION_MS + RESET_DELAY_MS) {
 					state.resetRun()
 					prevActiveRef.current = new Set()
@@ -169,5 +179,5 @@ export function useReplayDriver() {
 
 		frameId = requestAnimationFrame(tickFrame)
 		return () => cancelAnimationFrame(frameId)
-	}, [playing])
+	}, [playing, onRunPage])
 }
