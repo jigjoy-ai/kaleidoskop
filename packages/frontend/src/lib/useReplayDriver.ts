@@ -95,7 +95,10 @@ export function useReplayDriver() {
 			lastWall = wall
 
 			let nextSim = state.simTimeMs + dt
-			const live = state.sourceMode === "live" || state.sourceMode === "connecting"
+			const live =
+				state.sourceMode === "live" ||
+				state.sourceMode === "connecting" ||
+				state.sourceMode === "finished"
 			// Demo emissions also pause when the URL is on `/r/:id` — the
 			// page belongs to a specific real run, no scripted noise.
 			const demoSuppressed = live || onRunPage
