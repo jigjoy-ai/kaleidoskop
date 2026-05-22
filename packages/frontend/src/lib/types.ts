@@ -9,6 +9,7 @@ export type {
 	FiringPulse,
 	ParticipantRole,
 	ReplayEvent,
+	ReplaySeekBurst,
 	RunMetadata,
 	StreamCommand,
 	StreamMessage,

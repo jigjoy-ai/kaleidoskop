@@ -21,6 +21,9 @@ export const ZOOM_STEP = 0.15
 export const RIPPLE_SPEED_PX_PER_SEC = 760
 export const RIPPLE_MAX_RADIUS = 360
 export const RIPPLE_VISUAL_DURATION_MS = 700
+export const SEEK_BURST_WALL_MS = 1750
+export const SEEK_BURST_MIN_WALL_MS = 1500
+export const SEEK_BURST_MAX_WALL_MS = 2000
 
 /**
  * Replay clock source modes.
@@ -58,6 +61,7 @@ interface ReplayState {
 	firing: Record<string, FiringPulse>
 	activeRipples: ReplayEvent[]
 	recent: ReplayEvent[]
+	seekBursting: boolean
 
 	agentState: Record<string, AgentLifeState>
 	selectedAgentId: string | null
@@ -95,6 +99,15 @@ interface ReplayState {
 	emit: (e: ReplayEvent) => void
 	triggerSubscriber: (id: string, at: number, bucket: EventBucket) => void
 	tick: (now: number) => void
+	beginSeekBurst: () => void
+	emitBurstEvent: (event: ReplayEvent, visualAt: number) => void
+	finishSeekBurst: (snap: {
+		atMs: number
+		eventCount: number
+		agentState: Record<string, AgentLifeState>
+		recent: ReplayEvent[]
+	}) => void
+	cancelSeekBurst: () => void
 
 	setSimTime: (t: number) => void
 	setRunDurationMs: (ms: number) => void
@@ -152,6 +165,7 @@ export const useReplayClock = create<ReplayState>((set, get) => ({
 	firing: {},
 	activeRipples: [],
 	recent: [],
+	seekBursting: false,
 
 	agentState: {},
 	selectedAgentId: null,
@@ -215,6 +229,51 @@ export const useReplayClock = create<ReplayState>((set, get) => ({
 			return { firing: nextFiring, activeRipples: nextRipples }
 		}),
 
+	beginSeekBurst: () =>
+		set({
+			seekBursting: true,
+			firing: {},
+			activeRipples: [],
+			pausedFocus: null,
+		}),
+
+	emitBurstEvent: (event, visualAt) =>
+		set((s) => {
+			const visualEvent = { ...event, at: visualAt }
+			return {
+				eventCount: s.eventCount + 1,
+				firing: {
+					...s.firing,
+					[visualEvent.sourceId]: {
+						at: visualEvent.at,
+						bucket: visualEvent.bucket,
+					},
+				},
+				activeRipples: [...s.activeRipples, visualEvent].slice(-MAX_RECENT),
+				recent: [visualEvent, ...s.recent].slice(0, MAX_RECENT),
+			}
+		}),
+
+	finishSeekBurst: (snap) =>
+		set({
+			simTimeMs: snap.atMs,
+			eventCount: snap.eventCount,
+			agentState: snap.agentState,
+			recent: snap.recent,
+			firing: {},
+			activeRipples: [],
+			pausedFocus: null,
+			seekBursting: false,
+		}),
+
+	cancelSeekBurst: () =>
+		set({
+			seekBursting: false,
+			firing: {},
+			activeRipples: [],
+			pausedFocus: null,
+		}),
+
 	setSimTime: (t) => set({ simTimeMs: t }),
 	setRunDurationMs: (ms) => set({ runDurationMs: ms }),
 	resetRunDuration: () => set({ runDurationMs: DEFAULT_RUN_DURATION_MS }),
@@ -239,6 +298,7 @@ export const useReplayClock = create<ReplayState>((set, get) => ({
 			firing: {},
 			activeRipples: [],
 			pausedFocus: null,
+			seekBursting: false,
 		}),
 	setAgentStates: (states) => {
 		const prev = get().agentState
@@ -284,6 +344,7 @@ export const useReplayClock = create<ReplayState>((set, get) => ({
 			selectedAgentId: null,
 			pausedFocus: null,
 			agentState: {},
+			seekBursting: false,
 		}),
 }))
 
