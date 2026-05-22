@@ -11,6 +11,9 @@ import type {
 import { ReplayParticipant } from "./replay-participant.js"
 import { StreamObserver } from "./stream-observer.js"
 
+const SEEK_BURST_THRESHOLD_MS = 3000
+const SEEK_BURST_MAX_EVENTS = 200
+
 export interface ReplaySessionOptions {
 	participants: ParticipantInfo[]
 	events: ReplayEvent[]
@@ -135,6 +138,7 @@ export class ReplaySession {
 		// The frontend uses the snapshot to restore agentState +
 		// recent-events list to "what would be visible at this moment",
 		// then resumes streaming from the cursor.
+		const fromMs = this.currentSimMs()
 		const target = Math.max(0, Math.floor(toMs))
 		this.simMs = target
 		this.cursor = 0
@@ -146,15 +150,56 @@ export class ReplaySession {
 		}
 		this.wallStartedAt = Date.now()
 		this.wallSimAtStart = this.simMs
-		this.sink({
-			kind: "snapshot",
-			snapshot: this.computeSnapshot(target),
-		})
+		const snapshot = this.computeSnapshot(target)
+		if (Math.abs(target - fromMs) <= SEEK_BURST_THRESHOLD_MS) {
+			this.sink({
+				kind: "snapshot",
+				snapshot,
+			})
+		} else {
+			const range = this.seekBurstRange(fromMs, target)
+			const events = this.sampleSeekBurstEvents(range)
+			this.sink({
+				kind: "seek_burst",
+				burst: {
+					fromMs,
+					toMs: target,
+					direction: target >= fromMs ? "forward" : "backward",
+					events,
+					truncated: range.length > SEEK_BURST_MAX_EVENTS,
+					snapshot,
+				},
+			})
+		}
 		if (this.playing && this.timer !== null) {
 			clearTimeout(this.timer)
 			this.timer = null
 			this.scheduleNext()
 		}
+	}
+
+	private seekBurstRange(fromMs: number, target: number): ReplayEvent[] {
+		const range =
+			target >= fromMs
+				? this.events.filter((event) => event.at > fromMs && event.at <= target)
+				: this.events.filter((event) => event.at >= target && event.at < fromMs)
+		// Backward seeks still animate skipped events chronologically forward:
+		// the ripple pipeline is directional by source/subscribers, not by
+		// time reversal, and the destination snapshot is applied afterward.
+		return range.sort((a, b) => a.at - b.at)
+	}
+
+	private sampleSeekBurstEvents(range: ReplayEvent[]): ReplayEvent[] {
+		if (range.length <= SEEK_BURST_MAX_EVENTS) return range
+		const sampled: ReplayEvent[] = []
+		const seen = new Set<string>()
+		for (let i = 0; i < SEEK_BURST_MAX_EVENTS; i++) {
+			const event = range[Math.floor((i * range.length) / SEEK_BURST_MAX_EVENTS)]!
+			if (seen.has(event.id)) continue
+			seen.add(event.id)
+			sampled.push(event)
+		}
+		return sampled
 	}
 
 	/**
