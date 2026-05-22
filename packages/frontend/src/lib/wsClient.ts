@@ -1,6 +1,7 @@
 import type {
 	ParticipantInfo,
 	ReplayEvent,
+	ReplaySeekBurst,
 	ReplayStateSnapshot,
 	StreamMessage,
 } from "@kaleidoskop/shared"
@@ -174,6 +175,7 @@ export function connectToBackend(url: string): WsClientHandle {
 
 		switch (msg.kind) {
 			case "hello": {
+				useReplayClock.getState().cancelBurst()
 				handleHello(msg.participants, remap, lifecycle)
 				if (msg.meta?.durationMs && msg.meta.durationMs > 0) {
 					store.getState().setRunDurationMs(msg.meta.durationMs)
@@ -187,14 +189,21 @@ export function connectToBackend(url: string): WsClientHandle {
 				return
 			}
 			case "event": {
+				useReplayClock.getState().cancelBurst()
 				handleEvent(msg.event, remap, lifecycle)
 				return
 			}
 			case "snapshot": {
+				useReplayClock.getState().cancelBurst()
 				handleSnapshot(msg.snapshot, remap, lifecycle)
 				return
 			}
+			case "seek_burst": {
+				handleSeekBurst(msg.burst, remap, lifecycle)
+				return
+			}
 			case "done": {
+				useReplayClock.getState().cancelBurst()
 				// Run completed naturally. Don't reset state, don't
 				// flip back to "demo" — that would let the scripted
 				// driver kick in on top of the loaded events, and the
@@ -211,6 +220,7 @@ export function connectToBackend(url: string): WsClientHandle {
 				return
 			}
 			case "error": {
+				useReplayClock.getState().cancelBurst()
 				store.getState().setSourceMode("error", msg.message)
 				return
 			}
@@ -296,6 +306,37 @@ function handleEvent(
 	useReplayClock.getState().emit(remappedEvent)
 }
 
+function remapAgentState(
+	state: Record<string, AgentLifeState>,
+	remap: (id: string) => string,
+	roster: Map<string, unknown>,
+): Record<string, AgentLifeState> {
+	const out: Record<string, AgentLifeState> = {}
+	for (const [backendId, value] of Object.entries(state)) {
+		const layoutId = remap(backendId)
+		if (roster.has(layoutId)) out[layoutId] = value
+	}
+	return out
+}
+
+function remapEventList(
+	events: readonly ReplayEvent[],
+	remap: (id: string) => string,
+	roster: Map<string, unknown>,
+): ReplayEvent[] {
+	const out: ReplayEvent[] = []
+	for (const e of events) {
+		const source = remap(e.sourceId)
+		if (!roster.has(source)) continue
+		out.push({
+			...e,
+			sourceId: source,
+			subscriberIds: e.subscriberIds.map(remap).filter((id) => roster.has(id)),
+		})
+	}
+	return out
+}
+
 function handleSnapshot(
 	snap: ReplayStateSnapshot,
 	remap: (id: string) => string,
@@ -305,32 +346,48 @@ function handleSnapshot(
 	// Remap backend ids onto layout ids and drop anything we can't
 	// render. Snapshot semantics: replace state wholesale at the
 	// seek-target moment.
-	const remappedState: Record<string, AgentLifeState> = {}
-	for (const [backendId, state] of Object.entries(snap.agentState)) {
-		const layoutId = remap(backendId)
-		if (roster.has(layoutId)) {
-			remappedState[layoutId] = state
-		}
-	}
+	const remappedState = remapAgentState(snap.agentState, remap, roster)
 	lifecycle.reset(remappedState)
-
-	const remappedRecent: ReplayEvent[] = []
-	for (const e of snap.recent) {
-		const source = remap(e.sourceId)
-		if (!roster.has(source)) continue
-		remappedRecent.push({
-			...e,
-			sourceId: source,
-			subscriberIds: e.subscriberIds
-				.map(remap)
-				.filter((id) => roster.has(id)),
-		})
-	}
+	const remappedRecent = remapEventList(snap.recent, remap, roster)
 
 	useReplayClock.getState().applySnapshot({
 		atMs: snap.atMs,
 		eventCount: snap.eventCount,
 		agentState: remappedState,
 		recent: remappedRecent,
+	})
+}
+
+// Backward seeks burst chronologically forward — the in-between events play as
+// eye-candy, then the destination snapshot lands and overwrites lifecycle to
+// the (earlier) target state. Reversing would require an un-emit primitive
+// that doesn't exist and reads visually as confusion.
+function handleSeekBurst(
+	burst: ReplaySeekBurst,
+	remap: (id: string) => string,
+	lifecycle: LiveLifecycle,
+): void {
+	const roster = currentRoster()
+	const remappedEvents = remapEventList(burst.events, remap, roster)
+	const remappedDestAgentState = remapAgentState(
+		burst.snapshot.agentState,
+		remap,
+		roster,
+	)
+	const remappedRecent = remapEventList(burst.snapshot.recent, remap, roster)
+	// Reset lifecycle to the destination so subsequent live events branch
+	// off the post-burst state, not the pre-seek state.
+	lifecycle.reset(remappedDestAgentState)
+	useReplayClock.getState().playBurst(remappedEvents, {
+		atMs: burst.snapshot.atMs,
+		eventCount: burst.snapshot.eventCount,
+		agentState: remappedDestAgentState,
+		recent: remappedRecent,
+	})
+	track("seek_burst_played", {
+		fromMs: burst.fromMs,
+		toMs: burst.toMs,
+		eventCount: remappedEvents.length,
+		truncated: burst.truncated,
 	})
 }
