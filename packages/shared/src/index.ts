@@ -108,11 +108,21 @@ export interface ReplayStateSnapshot {
 	recent: ReplayEvent[]
 }
 
+export interface ReplaySeekBurst {
+	fromMs: number
+	toMs: number
+	direction: "forward" | "backward"
+	events: ReplayEvent[]
+	truncated: boolean
+	snapshot: ReplayStateSnapshot
+}
+
 // Top-level message envelope on the WebSocket stream backend → frontend.
 export type StreamMessage =
 	| { kind: "hello"; meta: RunMetadata; participants: ParticipantInfo[] }
 	| { kind: "event"; event: ReplayEvent }
 	| { kind: "snapshot"; snapshot: ReplayStateSnapshot }
+	| { kind: "seek_burst"; burst: ReplaySeekBurst }
 	| { kind: "done" }
 	| { kind: "error"; message: string }
 

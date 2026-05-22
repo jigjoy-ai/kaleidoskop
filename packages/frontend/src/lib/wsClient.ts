@@ -1,14 +1,17 @@
 import type {
 	ParticipantInfo,
 	ReplayEvent,
+	ReplaySeekBurst,
 	ReplayStateSnapshot,
 	StreamMessage,
 } from "@kaleidoskop/shared"
 
 import { track } from "./analytics"
-import { useReplayClock } from "./replayClock"
+import { SEEK_BURST_WALL_MS, useReplayClock } from "./replayClock"
 import type { AgentLifeState } from "./runScript"
 import { generateParticipants } from "./participants"
+
+const SEEK_BURST_FINISH_MS = 1850
 
 /**
  * Map a backend-discovered participant id onto a slot in the existing
@@ -127,6 +130,8 @@ export function connectToBackend(url: string): WsClientHandle {
 	const socket = new WebSocket(url)
 	const allocator = new StoryIdAllocator()
 	const lifecycle = new LiveLifecycle()
+	let burstTimers: number[] = []
+	let burstToken = 0
 
 	const remap = (backendId: string): string => {
 		if (backendId in BACKEND_TO_LAYOUT_ID) {
@@ -136,6 +141,15 @@ export function connectToBackend(url: string): WsClientHandle {
 			return allocator.allocate(backendId)
 		}
 		return backendId
+	}
+
+	const clearBurstTimers = () => {
+		burstToken += 1
+		for (const timer of burstTimers) {
+			window.clearTimeout(timer)
+		}
+		burstTimers = []
+		store.getState().cancelSeekBurst()
 	}
 
 	socket.addEventListener("open", () => {
@@ -150,11 +164,13 @@ export function connectToBackend(url: string): WsClientHandle {
 	})
 
 	socket.addEventListener("error", () => {
+		clearBurstTimers()
 		store.getState().setSourceMode("error", "WebSocket error")
 		store.getState().setBackendCommandSender(null)
 	})
 
 	socket.addEventListener("close", () => {
+		clearBurstTimers()
 		store.getState().setBackendCommandSender(null)
 		store.getState().resetRunDuration()
 		store.getState().resetParticipants()
@@ -191,10 +207,24 @@ export function connectToBackend(url: string): WsClientHandle {
 				return
 			}
 			case "snapshot": {
+				clearBurstTimers()
 				handleSnapshot(msg.snapshot, remap, lifecycle)
 				return
 			}
+			case "seek_burst": {
+				clearBurstTimers()
+				const token = burstToken
+				const nextTimers = handleSeekBurst(
+					msg.burst,
+					remap,
+					lifecycle,
+					() => token === burstToken,
+				)
+				burstTimers = nextTimers
+				return
+			}
 			case "done": {
+				clearBurstTimers()
 				// Run completed naturally. Don't reset state, don't
 				// flip back to "demo" — that would let the scripted
 				// driver kick in on top of the loaded events, and the
@@ -211,6 +241,7 @@ export function connectToBackend(url: string): WsClientHandle {
 				return
 			}
 			case "error": {
+				clearBurstTimers()
 				store.getState().setSourceMode("error", msg.message)
 				return
 			}
@@ -219,6 +250,7 @@ export function connectToBackend(url: string): WsClientHandle {
 
 	return {
 		close: () => {
+			clearBurstTimers()
 			try {
 				socket.close()
 			} catch {
@@ -301,6 +333,20 @@ function handleSnapshot(
 	remap: (id: string) => string,
 	lifecycle: LiveLifecycle,
 ): void {
+	const remapped = remapSnapshot(snap, remap)
+	lifecycle.reset(remapped.agentState)
+	useReplayClock.getState().applySnapshot(remapped)
+}
+
+function remapSnapshot(
+	snap: ReplayStateSnapshot,
+	remap: (id: string) => string,
+): {
+	atMs: number
+	eventCount: number
+	agentState: Record<string, AgentLifeState>
+	recent: ReplayEvent[]
+} {
 	const roster = currentRoster()
 	// Remap backend ids onto layout ids and drop anything we can't
 	// render. Snapshot semantics: replace state wholesale at the
@@ -312,7 +358,6 @@ function handleSnapshot(
 			remappedState[layoutId] = state
 		}
 	}
-	lifecycle.reset(remappedState)
 
 	const remappedRecent: ReplayEvent[] = []
 	for (const e of snap.recent) {
@@ -327,10 +372,73 @@ function handleSnapshot(
 		})
 	}
 
-	useReplayClock.getState().applySnapshot({
+	return {
 		atMs: snap.atMs,
 		eventCount: snap.eventCount,
 		agentState: remappedState,
 		recent: remappedRecent,
-	})
+	}
+}
+
+function handleSeekBurst(
+	burst: ReplaySeekBurst,
+	remap: (id: string) => string,
+	lifecycle: LiveLifecycle,
+	isCurrent: () => boolean,
+): number[] {
+	const roster = currentRoster()
+	const remappedSnapshot = remapSnapshot(burst.snapshot, remap)
+	const events: ReplayEvent[] = []
+
+	for (const event of burst.events) {
+		const source = remap(event.sourceId)
+		if (!roster.has(source)) continue
+		events.push({
+			...event,
+			sourceId: source,
+			subscriberIds: event.subscriberIds
+				.map(remap)
+				.filter((id) => roster.has(id)),
+		})
+	}
+
+	if (events.length === 0) {
+		lifecycle.reset(remappedSnapshot.agentState)
+		useReplayClock.getState().applySnapshot(remappedSnapshot)
+		return []
+	}
+
+	const timers: number[] = []
+	const firstAt = events[0]?.at ?? 0
+	const lastAt = events[events.length - 1]?.at ?? firstAt
+	const lastIndex = events.length - 1
+
+	useReplayClock.getState().beginSeekBurst()
+	for (const [index, event] of events.entries()) {
+		// Backward seeks are still played chronologically forward: ripples
+		// encode source/subscriber flow, and the final snapshot below is the
+		// authoritative destination state.
+		const delay =
+			lastAt > firstAt
+				? ((event.at - firstAt) / (lastAt - firstAt)) * SEEK_BURST_WALL_MS
+				: lastIndex > 0
+					? (index / lastIndex) * SEEK_BURST_WALL_MS
+					: 0
+		timers.push(
+			window.setTimeout(() => {
+				if (!isCurrent()) return
+				useReplayClock.getState().emitBurstEvent(event, performance.now())
+			}, delay),
+		)
+	}
+
+	timers.push(
+		window.setTimeout(() => {
+			if (!isCurrent()) return
+			lifecycle.reset(remappedSnapshot.agentState)
+			useReplayClock.getState().finishSeekBurst(remappedSnapshot)
+		}, SEEK_BURST_FINISH_MS),
+	)
+
+	return timers
 }
