@@ -108,11 +108,42 @@ export interface ReplayStateSnapshot {
 	recent: ReplayEvent[]
 }
 
+/** Replay-time scrub distance below which a seek stays silent (today's behavior). */
+export const SEEK_BURST_THRESHOLD_MS = 3000
+
+/** Hard cap on events carried in a seek_burst envelope to bound payload size. */
+export const SEEK_BURST_EVENT_CAP = 200
+
+/**
+ * Sent in place of `snapshot` when the user scrubs by more than
+ * SEEK_BURST_THRESHOLD_MS of replay time. The frontend plays `events`
+ * through the normal emit pipeline at burst speed, then applies
+ * `snapshot` as the authoritative destination state.
+ *
+ * Backward seeks: `events` is the chronologically-forward slice
+ * between min(fromMs, toMs) and max(fromMs, toMs). We do NOT reverse
+ * for backward seeks — there is no "un-emit" primitive and reversed
+ * ripples read as confusing. The destination snapshot is still
+ * authoritative, so visiting earlier replay time after the burst
+ * lands on the correct lifecycle state (snapshot-last wins).
+ */
+export interface ReplaySeekBurst {
+	fromMs: number
+	toMs: number
+	/** Chronological forward order; length <= SEEK_BURST_EVENT_CAP. */
+	events: ReplayEvent[]
+	/** True if the in-between window had more than the cap and was downsampled. */
+	truncated: boolean
+	/** Applied AFTER the burst finishes — authoritative destination state. */
+	snapshot: ReplayStateSnapshot
+}
+
 // Top-level message envelope on the WebSocket stream backend → frontend.
 export type StreamMessage =
 	| { kind: "hello"; meta: RunMetadata; participants: ParticipantInfo[] }
 	| { kind: "event"; event: ReplayEvent }
 	| { kind: "snapshot"; snapshot: ReplayStateSnapshot }
+	| { kind: "seek_burst"; burst: ReplaySeekBurst }
 	| { kind: "done" }
 	| { kind: "error"; message: string }
 
