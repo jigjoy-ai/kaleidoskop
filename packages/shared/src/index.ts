@@ -42,6 +42,9 @@ export type DomainEvent =
 	| "claude_rate_limit"
 	| "claude_stream_chunk"
 	| "claude_unknown_event"
+	| "codex_system"
+	| "codex_turn_event"
+	| "codex_item_event"
 	| "finalize_started"
 	| "pr_created"
 	| "error"
@@ -167,6 +170,9 @@ export const SUBSCRIBERS: Record<DomainEvent, readonly string[]> = {
 	claude_rate_limit: ["auditor"],
 	claude_stream_chunk: ["auditor"],
 	claude_unknown_event: ["auditor"],
+	codex_system: ["auditor"],
+	codex_turn_event: ["auditor"],
+	codex_item_event: ["auditor"],
 	finalize_started: ["auditor"],
 	pr_created: ["auditor"],
 	error: ["auditor"],

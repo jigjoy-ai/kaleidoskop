@@ -58,6 +58,9 @@ const BUCKET_OF: Partial<Record<DomainEvent, EventBucket>> = {
 	claude_rate_limit: "lifecycle",
 	claude_stream_chunk: "reasoning",
 	claude_unknown_event: "lifecycle",
+	codex_system: "lifecycle",
+	codex_turn_event: "lifecycle",
+	codex_item_event: "reasoning",
 	finalize_started: "lifecycle",
 	pr_created: "lifecycle",
 	error: "error",
@@ -262,6 +265,16 @@ export function summariseItem(
 			return `${sourceLabel} → stream chunk`
 		case "claude_unknown_event":
 			return `${sourceLabel} → claude (unknown)`
+		case "codex_system": {
+			const subtype = strField(fields, "subtype") ?? "?"
+			return `${sourceLabel} → codex:${subtype}`
+		}
+		case "codex_turn_event": {
+			const subtype = strField(fields, "subtype") ?? "?"
+			return `${sourceLabel} → turn:${subtype}`
+		}
+		case "codex_item_event":
+			return `${sourceLabel} → codex stream`
 		case "finalize_started":
 			return `Finalizer → composing PR`
 		case "pr_created":

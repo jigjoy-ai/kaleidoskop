@@ -145,6 +145,12 @@ function payloadFor(domain: DomainEvent, sourceLabel: string): string {
 			return `${sourceLabel} → stream chunk`
 		case "claude_unknown_event":
 			return `${sourceLabel} → claude (unknown)`
+		case "codex_system":
+			return `${sourceLabel} → codex init`
+		case "codex_turn_event":
+			return `${sourceLabel} → codex turn`
+		case "codex_item_event":
+			return `${sourceLabel} → codex stream`
 		case "level_compute_request":
 			return `Conductor → level compute request`
 		case "run_start_request":

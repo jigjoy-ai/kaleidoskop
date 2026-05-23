@@ -16,8 +16,10 @@ import type { ParticipantInfo, ParticipantRole } from "@kaleidoskop/shared"
  *   - `Sentry`                 → sentry
  *   - `Auditor`                → auditor
  *   - `Finalizer`              → finalizer
- *   - `StoryAgent:S1`          → story-S1
- *   - `_ClaudeCliParticipant:S1` → story-S1 (collapses with its parent StoryAgent)
+ *   - `StoryAgent:S1`              → story-S1
+ *   - `CodexStoryAgent:S1`         → story-S1 (Codex story wrapper)
+ *   - `_ClaudeCliParticipant:S1`   → story-S1 (collapses with its parent StoryAgent)
+ *   - `_CodexCliParticipant:S1`    → story-S1 (Codex CLI subprocess wrapper)
  *   - anything else with `:agentId` suffix → unknown:agentId
  *   - bare class names we don't recognise → bare slug
  */
@@ -52,6 +54,9 @@ const STORY_CLASSES = new Set([
 	"storyagent",
 	"claudecliparticipant",
 	"_claudecliparticipant",
+	"codexstoryagent",
+	"codexcliparticipant",
+	"_codexcliparticipant",
 ])
 
 export interface ParsedSource extends ParticipantInfo {
