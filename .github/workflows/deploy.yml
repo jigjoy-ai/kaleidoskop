@@ -49,10 +49,7 @@ jobs:
             - name: Install workspaces
               run: npm ci
 
-            - name: Build (frontend + backend, PostHog baked in)
-              env:
-                  VITE_POSTHOG_KEY: ${{ secrets.VITE_POSTHOG_KEY }}
-                  VITE_POSTHOG_HOST: ${{ secrets.VITE_POSTHOG_HOST }}
+            - name: Build (frontend + backend)
               run: npm run build
 
             - name: Configure SSH
