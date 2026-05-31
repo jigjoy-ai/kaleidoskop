@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { DropZone, triggerUploadPicker } from "./components/DropZone"
-import { track } from "./lib/analytics"
 
 const PRODUCTS: readonly { label: string; href: string }[] = [
 	{ label: "jigjoy", href: "https://jigjoy.ai" },
@@ -27,12 +26,10 @@ export default function LandingPage() {
 	const navigate = useNavigate()
 
 	const goDemo = () => {
-		track("landing_see_demo_clicked")
 		navigate("/r/smoke-test")
 	}
 
 	const goUpload = () => {
-		track("landing_upload_clicked")
 		triggerUploadPicker()
 	}
 
