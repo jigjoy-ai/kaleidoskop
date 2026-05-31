@@ -17,7 +17,8 @@ import type { ParticipantInfo, ParticipantRole } from "@kaleidoskop/shared"
  *   - `Auditor`                → auditor
  *   - `Finalizer`              → finalizer
  *   - `StoryAgent:S1`              → story-S1
- *   - `CodexStoryAgent:S1`         → story-S1 (Codex story wrapper)
+ *   - `CodexStoryAgent:S1`         → story-S1 (Codex execution backend)
+ *   - `OpenAIStoryAgent:S1`        → story-S1 (OpenAI-compatible backend: DeepSeek, etc.)
  *   - `_ClaudeCliParticipant:S1`   → story-S1 (collapses with its parent StoryAgent)
  *   - `_CodexCliParticipant:S1`    → story-S1 (Codex CLI subprocess wrapper)
  *   - anything else with `:agentId` suffix → unknown:agentId
@@ -50,14 +51,16 @@ const SINGLETON_LABEL: Record<string, string> = {
 	finalizer: "Finalizer",
 }
 
-const STORY_CLASSES = new Set([
-	"storyagent",
-	"claudecliparticipant",
-	"_claudecliparticipant",
-	"codexstoryagent",
-	"codexcliparticipant",
-	"_codexcliparticipant",
-])
+/**
+ * A source class denotes a per-story participant. baro names these by
+ * execution backend — `StoryAgent`, `CodexStoryAgent`, `OpenAIStoryAgent` —
+ * each optionally paired with a CLI child participant (`_ClaudeCliParticipant`,
+ * `_CodexCliParticipant`). Match by suffix so new backends (e.g. a future
+ * `GeminiStoryAgent`) are picked up without touching this file.
+ */
+function isStoryClass(cls: string): boolean {
+	return cls.endsWith("storyagent") || cls.endsWith("cliparticipant")
+}
 
 export interface ParsedSource extends ParticipantInfo {
 	raw: string
@@ -68,7 +71,7 @@ export function parseSource(raw: string): ParsedSource {
 	if (colonIndex >= 0) {
 		const cls = raw.slice(0, colonIndex).toLowerCase()
 		const agentId = raw.slice(colonIndex + 1)
-		if (STORY_CLASSES.has(cls)) {
+		if (isStoryClass(cls)) {
 			return {
 				id: `story-${agentId}`,
 				label: agentId,
