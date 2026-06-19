@@ -22,6 +22,17 @@ export const RIPPLE_SPEED_PX_PER_SEC = 760
 export const RIPPLE_MAX_RADIUS = 360
 export const RIPPLE_VISUAL_DURATION_MS = 700
 
+/** Wall-clock duration of the seek-burst animation. Spec range 1.5–2 s; pick mid-range. */
+export const SEEK_BURST_DURATION_MS = 1750
+
+/** Minimum gap between burst emits, so individual ripples register visually. */
+export const SEEK_BURST_MIN_GAP_MS = 8
+
+// Module-scoped imperative handles for the in-flight seek burst. Timer ids
+// live outside the Zustand store because they are side-effect handles, not
+// reactive state — nothing in the UI subscribes to them.
+let burstTimers: ReturnType<typeof setTimeout>[] = []
+
 /**
  * Replay clock source modes.
  *
@@ -116,6 +127,24 @@ interface ReplayState {
 		agentState: Record<string, AgentLifeState>
 		recent: ReplayEvent[]
 	}) => void
+
+	/**
+	 * Imperatively replay a burst of in-between events as eye-candy
+	 * during a large scrub, then land on the destination snapshot.
+	 * Each event is dispatched through the normal emit() pipeline so
+	 * the existing ripple/firing visualization picks them up unchanged.
+	 */
+	playBurst: (
+		events: ReplayEvent[],
+		destSnapshot: {
+			atMs: number
+			eventCount: number
+			agentState: Record<string, AgentLifeState>
+			recent: ReplayEvent[]
+		},
+	) => void
+	/** Clear every pending burst timer. Idempotent; safe to call on a fresh store. */
+	cancelBurst: () => void
 
 	selectAgent: (id: string | null) => void
 	setPausedFocus: (e: ReplayEvent | null) => void
@@ -240,6 +269,35 @@ export const useReplayClock = create<ReplayState>((set, get) => ({
 			activeRipples: [],
 			pausedFocus: null,
 		}),
+
+	// Backward seeks burst chronologically forward — the in-between events
+	// play as eye-candy, then the destination snapshot lands and overwrites
+	// lifecycle to the (earlier) target state. Reversing would require an
+	// un-emit primitive that doesn't exist and reads visually as confusion.
+	playBurst: (events, destSnapshot) => {
+		get().cancelBurst()
+		const gap = Math.max(
+			SEEK_BURST_DURATION_MS / Math.max(events.length, 1),
+			SEEK_BURST_MIN_GAP_MS,
+		)
+		for (let i = 0; i < events.length; i++) {
+			const ev = events[i]
+			const handle = setTimeout(() => {
+				get().emit(ev)
+			}, i * gap)
+			burstTimers.push(handle)
+		}
+		const finalHandle = setTimeout(() => {
+			get().applySnapshot(destSnapshot)
+		}, SEEK_BURST_DURATION_MS)
+		burstTimers.push(finalHandle)
+	},
+
+	cancelBurst: () => {
+		for (const handle of burstTimers) clearTimeout(handle)
+		burstTimers = []
+	},
+
 	setAgentStates: (states) => {
 		const prev = get().agentState
 		let same = Object.keys(prev).length === Object.keys(states).length
@@ -274,7 +332,8 @@ export const useReplayClock = create<ReplayState>((set, get) => ({
 		set({ sourceMode: mode, sourceError: err }),
 	setBackendCommandSender: (fn) => set({ backendCommandSender: fn }),
 
-	resetRun: () =>
+	resetRun: () => {
+		get().cancelBurst()
 		set({
 			firing: {},
 			activeRipples: [],
@@ -284,7 +343,8 @@ export const useReplayClock = create<ReplayState>((set, get) => ({
 			selectedAgentId: null,
 			pausedFocus: null,
 			agentState: {},
-		}),
+		})
+	},
 }))
 
 export { FIRE_HOLD_MS }

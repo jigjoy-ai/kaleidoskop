@@ -1,11 +1,13 @@
 import { AgenticEnvironment } from "@mozaik-ai/core"
-import type {
-	AgentLifeState,
-	ParticipantInfo,
-	ReplayEvent,
-	ReplayStateSnapshot,
-	StreamCommand,
-	StreamMessage,
+import {
+	SEEK_BURST_EVENT_CAP,
+	SEEK_BURST_THRESHOLD_MS,
+	type AgentLifeState,
+	type ParticipantInfo,
+	type ReplayEvent,
+	type ReplayStateSnapshot,
+	type StreamCommand,
+	type StreamMessage,
 } from "@kaleidoskop/shared"
 
 import { ReplayParticipant } from "./replay-participant.js"
@@ -135,6 +137,7 @@ export class ReplaySession {
 		// The frontend uses the snapshot to restore agentState +
 		// recent-events list to "what would be visible at this moment",
 		// then resumes streaming from the cursor.
+		const fromMs = this.simMs
 		const target = Math.max(0, Math.floor(toMs))
 		this.simMs = target
 		this.cursor = 0
@@ -146,10 +149,50 @@ export class ReplaySession {
 		}
 		this.wallStartedAt = Date.now()
 		this.wallSimAtStart = this.simMs
-		this.sink({
-			kind: "snapshot",
-			snapshot: this.computeSnapshot(target),
-		})
+		const distanceMs = Math.abs(target - fromMs)
+		if (distanceMs <= SEEK_BURST_THRESHOLD_MS) {
+			this.sink({
+				kind: "snapshot",
+				snapshot: this.computeSnapshot(target),
+			})
+		} else {
+			// Backward seeks burst chronologically forward — the in-between
+			// events play as eye-candy, then the destination snapshot lands
+			// and overwrites lifecycle to the (earlier) target state.
+			// Reversing would require an un-emit primitive that doesn't
+			// exist and reads visually as confusion.
+			const lo = Math.min(fromMs, target)
+			const hi = Math.max(fromMs, target)
+			const window: ReplayEvent[] = []
+			for (const event of this.events) {
+				if (event.at <= lo) continue
+				if (event.at > hi) break
+				window.push(event)
+			}
+			let events: ReplayEvent[]
+			let truncated: boolean
+			if (window.length > SEEK_BURST_EVENT_CAP) {
+				const step = window.length / SEEK_BURST_EVENT_CAP
+				events = []
+				for (let i = 0; i < SEEK_BURST_EVENT_CAP; i++) {
+					events.push(window[Math.floor(i * step)]!)
+				}
+				truncated = true
+			} else {
+				events = window
+				truncated = false
+			}
+			this.sink({
+				kind: "seek_burst",
+				burst: {
+					fromMs,
+					toMs: target,
+					events,
+					truncated,
+					snapshot: this.computeSnapshot(target),
+				},
+			})
+		}
 		if (this.playing && this.timer !== null) {
 			clearTimeout(this.timer)
 			this.timer = null
